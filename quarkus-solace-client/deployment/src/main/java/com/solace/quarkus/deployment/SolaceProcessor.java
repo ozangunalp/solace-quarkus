@@ -10,12 +10,14 @@ import org.jboss.jandex.*;
 
 import com.solace.messaging.MessagingService;
 import com.solace.quarkus.MessagingServiceClientCustomizer;
+import com.solace.quarkus.runtime.OidcProvider;
 import com.solace.quarkus.runtime.SolaceConfig;
 import com.solace.quarkus.runtime.SolaceRecorder;
 import com.solace.quarkus.runtime.observability.SolaceMetricBinder;
 import com.solacesystems.jcsmp.JCSMPFactory;
 
 import io.quarkus.arc.SyntheticCreationalContext;
+import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeansRuntimeInitBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
@@ -38,6 +40,8 @@ class SolaceProcessor {
             DotName.createSimple(Instance.class),
             new Type[] { ClassType.create(DotName.createSimple(MessagingServiceClientCustomizer.class.getName())) }, null);
 
+    private static final Type OIDC_PROVIDER = ClassType.create(DotName.createSimple(OidcProvider.class));
+
     private static final AnnotationInstance[] EMPTY_ANNOTATIONS = new AnnotationInstance[0];
 
     @BuildStep
@@ -59,15 +63,18 @@ class SolaceProcessor {
     @Record(ExecutionTime.RUNTIME_INIT)
     ServiceStartBuildItem init(
             SolaceConfig config, SolaceRecorder recorder,
+            BuildProducer<AdditionalBeanBuildItem> additionalBeanBuildItemBuildProducer,
             ShutdownContextBuildItem shutdown, BuildProducer<SyntheticBeanBuildItem> syntheticBeans) {
 
         Function<SyntheticCreationalContext<MessagingService>, MessagingService> function = recorder.init(config, shutdown);
 
+        additionalBeanBuildItemBuildProducer.produce(AdditionalBeanBuildItem.unremovableOf(OidcProvider.class));
         SyntheticBeanBuildItem.ExtendedBeanConfigurator solaceConfigurator = SyntheticBeanBuildItem
                 .configure(MessagingService.class)
                 .defaultBean()
                 .scope(ApplicationScoped.class)
                 .addInjectionPoint(SOLACE_CUSTOMIZER_INJECTION_TYPE, EMPTY_ANNOTATIONS)
+                .addInjectionPoint(OIDC_PROVIDER)
                 .createWith(function)
                 .unremovable()
                 .setRuntimeInit();
