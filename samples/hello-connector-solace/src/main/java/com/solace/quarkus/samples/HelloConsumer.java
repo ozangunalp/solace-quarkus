@@ -46,10 +46,10 @@ public class HelloConsumer {
      *
      * @param p
      */
-    @Incoming("hello-plain-message-in")
-    void consumePayload(String p) {
-        Log.infof("Received message: %s", p);
-    }
+//    @Incoming("hello-plain-message-in")
+//    void consumePayload(String p) {
+//        Log.infof("Received message: %s", p);
+//    }
 
     /**
      * Receives message from queue - queue.foobar
