@@ -2,11 +2,11 @@ package com.solace.quarkus.messaging.converters;
 
 import java.lang.reflect.Type;
 
+import com.solacesystems.jcsmp.BytesXMLMessage;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import org.eclipse.microprofile.reactive.messaging.Message;
 
-import com.solace.messaging.receiver.InboundMessage;
 import com.solace.quarkus.messaging.incoming.SolaceInboundMetadata;
 
 import io.smallrye.reactive.messaging.MessageConverter;
@@ -16,7 +16,7 @@ import io.smallrye.reactive.messaging.providers.helpers.TypeUtils;
 public class SolaceMessageConverter implements MessageConverter {
     @Override
     public boolean canConvert(Message<?> in, Type target) {
-        return TypeUtils.isAssignable(target, InboundMessage.class)
+        return TypeUtils.isAssignable(target, BytesXMLMessage.class)
                 && in.getMetadata(SolaceInboundMetadata.class).isPresent();
     }
 

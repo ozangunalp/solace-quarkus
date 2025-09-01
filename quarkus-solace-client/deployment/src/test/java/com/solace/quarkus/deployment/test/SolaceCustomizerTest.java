@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.solacesystems.jcsmp.JCSMPException;
+import com.solacesystems.jcsmp.JCSMPProperties;
+import com.solacesystems.jcsmp.JCSMPSession;
+import com.solacesystems.jcsmp.XMLMessageProducer;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
@@ -12,10 +16,6 @@ import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import com.solace.messaging.MessagingService;
-import com.solace.messaging.MessagingServiceClientBuilder;
-import com.solace.messaging.config.RetryStrategy;
-import com.solace.messaging.publisher.DirectMessagePublisher;
 import com.solace.quarkus.MessagingServiceClientCustomizer;
 
 import io.quarkus.test.QuarkusUnitTest;
@@ -30,14 +30,20 @@ public class SolaceCustomizerTest {
     @Inject
     MyCustomizer customizer;
     @Inject
-    MessagingService solace;
+    JCSMPSession solace;
 
     @Test
     public void test() {
-        DirectMessagePublisher publisher = solace.createDirectMessagePublisherBuilder()
-                .build().start();
-        assertThat(customizer.called()).isTrue();
-        publisher.terminate(1);
+        try {
+            XMLMessageProducer prod = solace.getMessageProducer(null);
+            assertThat(customizer.called()).isTrue();
+            prod.close();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
+
+//        DirectMessagePublisher publisher = solace.createDirectMessagePublisherBuilder()
+//                .build().start();
     }
 
     @Singleton
@@ -46,9 +52,10 @@ public class SolaceCustomizerTest {
         AtomicBoolean called = new AtomicBoolean();
 
         @Override
-        public MessagingServiceClientBuilder customize(MessagingServiceClientBuilder builder) {
+        public JCSMPProperties customize(JCSMPProperties builder) {
             called.set(true);
-            return builder.withReconnectionRetryStrategy(RetryStrategy.neverRetry());
+            builder.setProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES_RECONNECT_RETRIES, 0);
+            return builder;
         }
 
         public boolean called() {

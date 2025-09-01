@@ -38,7 +38,7 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <quarkus.version>3.15.4</quarkus.version>
 
-    <solace.version>1.4.0</solace.version>
+    <solace.version>10.28.1</solace.version>
 
     <assertj-core.version>3.24.2</assertj-core.version>
     <weld.version>5.1.2.Final</weld.version>
@@ -56,10 +56,16 @@
         <scope>import</scope>
       </dependency>
 
+<!--      <dependency>-->
+<!--        <groupId>com.solace</groupId>-->
+<!--        <artifactId>solace-messaging-client</artifactId>-->
+<!--        <version>${solace.version}</version>-->
+<!--      </dependency>-->
+
       <dependency>
-        <groupId>com.solace</groupId>
-        <artifactId>solace-messaging-client</artifactId>
-        <version>${solace.version}</version>
+        <groupId>com.solacesystems</groupId>
+        <artifactId>sol-jcsmp</artifactId>
+        <version>10.28.1</version>
       </dependency>
 
       <dependency>

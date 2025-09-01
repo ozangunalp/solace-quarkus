@@ -3,12 +3,12 @@ package com.solace.quarkus.deployment;
 import java.util.Optional;
 import java.util.function.Function;
 
+import com.solacesystems.jcsmp.JCSMPSession;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 
 import org.jboss.jandex.*;
 
-import com.solace.messaging.MessagingService;
 import com.solace.quarkus.MessagingServiceClientCustomizer;
 import com.solace.quarkus.runtime.OidcProvider;
 import com.solace.quarkus.runtime.SolaceConfig;
@@ -62,12 +62,12 @@ class SolaceProcessor {
             ShutdownContextBuildItem shutdown, BuildProducer<SyntheticBeanBuildItem> syntheticBeans,
             BuildProducer<AdditionalBeanBuildItem> additionalBeanBuildItemBuildProducer) {
 
-        Function<SyntheticCreationalContext<MessagingService>, MessagingService> function = recorder.init(config, shutdown);
+        Function<SyntheticCreationalContext<JCSMPSession>, JCSMPSession> function = recorder.init(config, shutdown);
 
         additionalBeanBuildItemBuildProducer.produce(AdditionalBeanBuildItem.unremovableOf(OidcProvider.class));
 
         SyntheticBeanBuildItem.ExtendedBeanConfigurator solaceConfigurator = SyntheticBeanBuildItem
-                .configure(MessagingService.class)
+                .configure(JCSMPSession.class)
                 .defaultBean()
                 .scope(ApplicationScoped.class)
                 .addInjectionPoint(SOLACE_CUSTOMIZER_INJECTION_TYPE, EMPTY_ANNOTATIONS)

@@ -2,17 +2,13 @@ package com.solace.quarkus;
 
 import java.util.List;
 
+import com.solacesystems.jcsmp.*;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
-
-import com.solace.messaging.MessagingService;
-import com.solace.messaging.publisher.DirectMessagePublisher;
-import com.solace.messaging.publisher.PersistentMessagePublisher;
-import com.solace.messaging.resources.Topic;
 
 import io.quarkus.runtime.StartupEvent;
 
@@ -23,13 +19,17 @@ public class SolaceResource {
     SolaceConsumer consumer;
 
     @Inject
-    MessagingService solace;
-    private DirectMessagePublisher directMessagePublisher;
-    private PersistentMessagePublisher persistentMessagePublisher;
+    JCSMPSession solace;
+    private XMLMessageProducer directMessagePublisher;
+    private XMLMessageProducer persistentMessagePublisher;
 
     public void init(@Observes StartupEvent ev) {
-        directMessagePublisher = solace.createDirectMessagePublisherBuilder().build().start();
-        persistentMessagePublisher = solace.createPersistentMessagePublisherBuilder().build().start();
+        try {
+            directMessagePublisher = solace.getMessageProducer(null);
+            persistentMessagePublisher = solace.getMessageProducer(null);
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @GET
@@ -49,13 +49,27 @@ public class SolaceResource {
     @POST
     @Path("/direct")
     public void sendDirect(String message) {
-        directMessagePublisher.publish(message, Topic.of("hello/direct"));
+        TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+        textMessage.setText(message);
+        textMessage.setDeliveryMode(DeliveryMode.DIRECT);
+        try {
+            directMessagePublisher.send(textMessage, JCSMPFactory.onlyInstance().createTopic("hello/direct"));
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @POST
     @Path("/persistent")
     public void sendPersistent(String message) {
-        persistentMessagePublisher.publish(message, Topic.of("hello/persistent"));
+        TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+        textMessage.setText(message);
+        textMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+        try {
+            persistentMessagePublisher.send(textMessage, JCSMPFactory.onlyInstance().createTopic("hello/persistent"));
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 }

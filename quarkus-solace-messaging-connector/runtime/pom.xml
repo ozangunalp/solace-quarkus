@@ -27,9 +27,13 @@
             <groupId>io.smallrye.reactive</groupId>
             <artifactId>smallrye-reactive-messaging-otel</artifactId>
         </dependency>
+<!--        <dependency>-->
+<!--            <groupId>com.solace</groupId>-->
+<!--            <artifactId>solace-messaging-client</artifactId>-->
+<!--        </dependency>-->
         <dependency>
-            <groupId>com.solace</groupId>
-            <artifactId>solace-messaging-client</artifactId>
+            <groupId>com.solacesystems</groupId>
+            <artifactId>sol-jcsmp</artifactId>
         </dependency>
         <dependency>
             <groupId>org.jboss.logging</groupId>

@@ -1,45 +1,75 @@
 package com.solace.quarkus;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import com.solacesystems.jcsmp.*;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
-
-import com.solace.messaging.MessagingService;
-import com.solace.messaging.config.MissingResourcesCreationConfiguration;
-import com.solace.messaging.receiver.DirectMessageReceiver;
-import com.solace.messaging.receiver.PersistentMessageReceiver;
-import com.solace.messaging.resources.Queue;
-import com.solace.messaging.resources.TopicSubscription;
 
 import io.quarkus.runtime.ShutdownEvent;
 
 @ApplicationScoped
 public class SolaceConsumer {
 
-    private final DirectMessageReceiver directReceiver;
-    private final PersistentMessageReceiver persistentReceiver;
+    private final XMLMessageConsumer directReceiver;
+    private final FlowReceiver persistentReceiver;
     List<String> direct = new CopyOnWriteArrayList<>();
     List<String> persistent = new CopyOnWriteArrayList<>();
 
-    public SolaceConsumer(MessagingService solace) {
-        directReceiver = solace.createDirectMessageReceiverBuilder()
-                .withSubscriptions(TopicSubscription.of("hello/direct"))
-                .build().start();
-        persistentReceiver = solace.createPersistentMessageReceiverBuilder()
-                .withMissingResourcesCreationStrategy(
-                        MissingResourcesCreationConfiguration.MissingResourcesCreationStrategy.CREATE_ON_START)
-                .withSubscriptions(TopicSubscription.of("hello/persistent"))
-                .build(Queue.durableExclusiveQueue("hello/persistent")).start();
+    public SolaceConsumer(JCSMPSession solace) throws JCSMPException {
+        directReceiver = solace.getMessageConsumer(new XMLMessageListener() {
+            @Override
+            public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                if (bytesXMLMessage instanceof TextMessage) {
+                    consumeDirect(((TextMessage) bytesXMLMessage).getText());
+                }
+            }
 
-        directReceiver.receiveAsync(h -> consumeDirect(h.getPayloadAsString()));
-        persistentReceiver.receiveAsync(h -> consumePersistent(h.getPayloadAsString()));
+            @Override
+            public void onException(JCSMPException e) {
+
+            }
+        });
+        solace.addSubscription(JCSMPFactory.onlyInstance().createTopic("hello/direct"));
+        directReceiver.start();
+
+        // configure the queue API object locally
+        final Queue queue = JCSMPFactory.onlyInstance().createQueue("hello/persistent");
+        // Create a Flow be able to bind to and consume messages from the Queue.
+        final ConsumerFlowProperties flow_prop = new ConsumerFlowProperties();
+        flow_prop.setEndpoint(queue);
+
+        EndpointProperties endpoint_props = new EndpointProperties();
+        endpoint_props.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+        endpoint_props.setPermission(EndpointProperties.PERMISSION_CONSUME);
+        endpoint_props.setQuota(0);
+        solace.provision(queue, endpoint_props, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
+        try {
+            solace.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic("hello/persistent"), JCSMPSession.WAIT_FOR_CONFIRM);
+        } catch (JCSMPException e) {
+        }
+
+        persistentReceiver = solace.createFlow(new XMLMessageListener() {
+
+            @Override
+            public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                if (bytesXMLMessage instanceof TextMessage) {
+                    consumePersistent(((TextMessage) bytesXMLMessage).getText());
+                }
+            }
+
+            @Override
+            public void onException(JCSMPException e) {
+
+            }
+        }, flow_prop, endpoint_props);
     }
 
     public void shutdown(@Observes ShutdownEvent event) {
-        directReceiver.terminate(1);
-        persistentReceiver.terminate(1);
+        directReceiver.close();
+        persistentReceiver.close();
     }
 
     public void consumeDirect(String message) {

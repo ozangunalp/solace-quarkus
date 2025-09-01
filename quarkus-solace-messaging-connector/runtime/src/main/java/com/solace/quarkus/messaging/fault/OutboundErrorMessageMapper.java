@@ -2,24 +2,19 @@ package com.solace.quarkus.messaging.fault;
 
 import java.util.Properties;
 
-import com.solace.messaging.config.SolaceProperties;
-import com.solace.messaging.publisher.OutboundMessage;
-import com.solace.messaging.publisher.OutboundMessageBuilder;
-import com.solace.messaging.receiver.InboundMessage;
+import com.solacesystems.jcsmp.*;
 
 class OutboundErrorMessageMapper {
 
-    public OutboundMessage mapError(OutboundMessageBuilder messageBuilder, InboundMessage inputMessage,
-            boolean dmqEligible, Long timeToLive) {
+    public BytesXMLMessage mapError(JCSMPSession solace, BytesXMLMessage inputMessage,
+                                    boolean dmqEligible, Long timeToLive) {
         Properties extendedMessageProperties = new Properties();
-
-        extendedMessageProperties.setProperty(SolaceProperties.MessageProperties.PERSISTENT_DMQ_ELIGIBLE,
-                Boolean.toString(dmqEligible));
-        messageBuilder.fromProperties(extendedMessageProperties);
+        BytesXMLMessage outboundMessage = JCSMPFactory.onlyInstance().createMessage(BytesXMLMessage.class);
+        outboundMessage.setDMQEligible(dmqEligible);
         if (timeToLive != null) {
-            messageBuilder.withTimeToLive(timeToLive);
+            outboundMessage.setTimeToLive(timeToLive);
         }
-
-        return messageBuilder.build(inputMessage.getPayloadAsBytes());
+        outboundMessage.writeAttachment(inputMessage.getAttachmentByteBuffer().array());
+        return outboundMessage;
     }
 }
