@@ -3,15 +3,15 @@ package com.solace.quarkus.messaging.base;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 
-import com.solace.messaging.MessagingService;
+import com.solacesystems.jcsmp.JCSMPSession;
 
 @ApplicationScoped
 public class MessagingServiceProvider {
 
-    static MessagingService messagingService;
+    static JCSMPSession messagingService;
 
     @Produces
-    MessagingService messagingService() {
+    JCSMPSession messagingService() {
         return messagingService;
     }
 }

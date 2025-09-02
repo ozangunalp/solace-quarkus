@@ -2,13 +2,14 @@ package com.solace.quarkus;
 
 import java.util.List;
 
-import com.solacesystems.jcsmp.*;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+
+import com.solacesystems.jcsmp.*;
 
 import io.quarkus.runtime.StartupEvent;
 
@@ -25,8 +26,28 @@ public class SolaceResource {
 
     public void init(@Observes StartupEvent ev) {
         try {
-            directMessagePublisher = solace.getMessageProducer(null);
-            persistentMessagePublisher = solace.getMessageProducer(null);
+            directMessagePublisher = solace.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
+            persistentMessagePublisher = solace.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
         } catch (JCSMPException e) {
             throw new RuntimeException(e);
         }

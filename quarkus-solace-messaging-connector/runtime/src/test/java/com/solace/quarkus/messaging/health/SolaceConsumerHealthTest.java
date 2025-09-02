@@ -13,11 +13,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.junit.jupiter.api.Test;
 
-import com.solace.messaging.publisher.PersistentMessagePublisher;
-import com.solace.messaging.receiver.InboundMessage;
-import com.solace.messaging.resources.Topic;
 import com.solace.quarkus.messaging.base.WeldTestBase;
+import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
 import com.solace.quarkus.messaging.incoming.SolaceInboundMessage;
+import com.solacesystems.jcsmp.*;
 
 import io.smallrye.reactive.messaging.health.HealthReport;
 import io.smallrye.reactive.messaging.test.common.config.MapBasedConfig;
@@ -39,15 +38,26 @@ public class SolaceConsumerHealthTest extends WeldTestBase {
         await().until(() -> isStarted() && isReady());
 
         // Produce messages
-        PersistentMessagePublisher publisher = messagingService.createPersistentMessagePublisherBuilder()
-                .build()
-                .start();
-        Topic tp = Topic.of(topic);
-        publisher.publish("1", tp);
-        publisher.publish("2", tp);
-        publisher.publish("3", tp);
-        publisher.publish("4", tp);
-        publisher.publish("5", tp);
+        XMLMessageProducer publisher = null;
+        try {
+            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
+            Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
+            for (int i = 1; i <= 5; i++) {
+                sendTextMessage(Integer.toString(i), publisher, tp);
+            }
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         await().until(() -> isAlive());
 
@@ -79,12 +89,27 @@ public class SolaceConsumerHealthTest extends WeldTestBase {
         await().until(() -> isStarted() && isReady());
 
         // Produce messages
-        PersistentMessagePublisher publisher = messagingService.createPersistentMessagePublisherBuilder()
-                .build()
-                .start();
-        Topic tp = Topic.of(topic);
-        publisher.publish("1", tp);
-        publisher.publish("2", tp);
+        XMLMessageProducer publisher = null;
+        Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
+        try {
+            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
+
+            for (int i = 1; i <= 2; i++) {
+                sendTextMessage(Integer.toString(i), publisher, tp);
+            }
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         await().until(() -> isAlive());
 
@@ -99,14 +124,15 @@ public class SolaceConsumerHealthTest extends WeldTestBase {
         assertThat(liveness.getChannels()).hasSize(1);
         assertThat(readiness.getChannels()).hasSize(1);
 
-        publisher.publish("3", tp);
+        sendTextMessage("3", publisher, tp);
+
         await().until(() -> {
             HealthReport healthReport = getHealth().getLiveness();
             return (healthReport.isOk() == false && !healthReport.getChannels().get(0).getMessage().isEmpty());
         });
 
-        publisher.publish("4", tp);
-        publisher.publish("5", tp);
+        sendTextMessage("4", publisher, tp);
+        sendTextMessage("5", publisher, tp);
         await().until(() -> getHealth().getLiveness().isOk() == true);
     }
 
@@ -115,8 +141,8 @@ public class SolaceConsumerHealthTest extends WeldTestBase {
         private final List<String> received = new CopyOnWriteArrayList<>();
 
         @Incoming("in")
-        void in(InboundMessage msg) {
-            received.add(msg.getPayloadAsString());
+        void in(BytesXMLMessage msg) {
+            received.add(SolaceMessageUtils.getPayloadAsString(msg));
         }
 
         public List<String> getReceived() {
@@ -136,6 +162,17 @@ public class SolaceConsumerHealthTest extends WeldTestBase {
             }
 
             return msg.ack();
+        }
+    }
+
+    private void sendTextMessage(String payload, XMLMessageProducer publisher, Topic tp) {
+        TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+        textMessage.setText(payload);
+        textMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+        try {
+            publisher.send(textMessage, tp);
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
     }
 }

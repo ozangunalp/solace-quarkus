@@ -1,20 +1,17 @@
 package com.solace.quarkus.messaging.incoming;
 
 import java.io.Serializable;
-import java.util.HashMap;
 import java.util.Map;
 
 import com.solace.quarkus.messaging.converters.Converter;
-import com.solace.quarkus.messaging.converters.SolaceMessageTypeConverter;
+import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
 import com.solacesystems.jcsmp.*;
 
 public class SolaceInboundMetadata {
-
     private final BytesXMLMessage msg;
-    private final SolaceMessageTypeConverter solaceMessageTypeConverter;
-    public SolaceInboundMetadata(BytesXMLMessage msg, SolaceMessageTypeConverter solaceMessageTypeConverter) {
+
+    public SolaceInboundMetadata(BytesXMLMessage msg) {
         this.msg = msg;
-        this.solaceMessageTypeConverter = solaceMessageTypeConverter;
     }
 
     public boolean isRedelivered() {
@@ -28,7 +25,7 @@ public class SolaceInboundMetadata {
     public <T extends Serializable> T getAndConvertPayload(Converter.BytesToObject<T> bytesToObject, Class<T> aClass)
             throws RuntimeException {
         return getAndConvertPayload(bytesToObject, aClass, msg);
-//        return msg.getAndConvertPayload(bytesToObject, aClass);
+        //        return msg.getAndConvertPayload(bytesToObject, aClass);
     }
 
     public String getDestinationName() {
@@ -47,9 +44,9 @@ public class SolaceInboundMetadata {
         return msg.getReplicationGroupMessageId();
     }
 
-//    public int getClassOfService() {
-//        return msg.getClassOfService();
-//    }
+    //    public int getClassOfService() {
+    //        return msg.getClassOfService();
+    //    }
 
     public Long getSenderTimestamp() {
         return msg.getSenderTimestamp();
@@ -72,7 +69,7 @@ public class SolaceInboundMetadata {
     }
 
     public String getPayloadAsString() {
-        return this.solaceMessageTypeConverter.getPayloadAsString(msg);
+        return SolaceMessageUtils.getPayloadAsString(msg);
     }
 
     //    public Object getCorrelationKey() {
@@ -103,20 +100,20 @@ public class SolaceInboundMetadata {
         return msg.dump();
     }
 
-//    public InteroperabilitySupport.RestInteroperabilitySupport getRestInteroperabilitySupport() {
-//        return msg.getRestInteroperabilitySupport();
-//    }
+    //    public InteroperabilitySupport.RestInteroperabilitySupport getRestInteroperabilitySupport() {
+    //        return msg.getRestInteroperabilitySupport();
+    //    }
 
     public BytesXMLMessage getMessage() {
         return msg;
     }
 
     public String getPayload() {
-        return this.solaceMessageTypeConverter.getPayloadAsString(msg);
+        return SolaceMessageUtils.getPayloadAsString(msg);
     }
 
     public byte[] getPayloadAsBytes() {
-        return this.solaceMessageTypeConverter.getPayloadAsBytes(msg);
+        return SolaceMessageUtils.getPayloadAsBytes(msg);
     }
 
     public Object getKey() {
@@ -132,7 +129,7 @@ public class SolaceInboundMetadata {
     }
 
     public Map<String, String> getProperties() {
-        return this.solaceMessageTypeConverter.getPropertiesMap(msg.getProperties());
+        return SolaceMessageUtils.getPropertiesMap(msg.getProperties());
     }
 
     public String getPartitionKey() {
@@ -143,16 +140,17 @@ public class SolaceInboundMetadata {
         }
     }
 
-    public <T extends Serializable> T getAndConvertPayload(Converter.BytesToObject<T> converter, Class<T> outputType, BytesXMLMessage solaceMessage) {
-//        Validation.nullIllegal(converter, "Converter can't be null");
-//        Validation.nullIllegal(outputType, "Output type parameter can't be null");
-//        if (converter instanceof MessageToSDTMapConverter) {
-//            MessageToSDTMapConverter sdtConverter = (MessageToSDTMapConverter)converter;
-//            return (T)sdtConverter.get(solaceMessage);
-//        } else
-            if (solaceMessage instanceof BytesMessage) {
-            byte[] b = ((BytesMessage)solaceMessage).getData();
-            return (T)converter.convert(b);
+    public <T extends Serializable> T getAndConvertPayload(Converter.BytesToObject<T> converter, Class<T> outputType,
+            BytesXMLMessage solaceMessage) {
+        //        Validation.nullIllegal(converter, "Converter can't be null");
+        //        Validation.nullIllegal(outputType, "Output type parameter can't be null");
+        //        if (converter instanceof MessageToSDTMapConverter) {
+        //            MessageToSDTMapConverter sdtConverter = (MessageToSDTMapConverter)converter;
+        //            return (T)sdtConverter.get(solaceMessage);
+        //        } else
+        if (solaceMessage instanceof BytesMessage) {
+            byte[] b = ((BytesMessage) solaceMessage).getData();
+            return (T) converter.convert(b);
         } else {
             throw new RuntimeException("Incompatible message, provided converter can't be used");
         }

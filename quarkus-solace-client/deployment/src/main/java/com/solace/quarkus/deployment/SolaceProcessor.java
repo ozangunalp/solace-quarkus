@@ -3,7 +3,6 @@ package com.solace.quarkus.deployment;
 import java.util.Optional;
 import java.util.function.Function;
 
-import com.solacesystems.jcsmp.JCSMPSession;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 
@@ -15,6 +14,7 @@ import com.solace.quarkus.runtime.SolaceConfig;
 import com.solace.quarkus.runtime.SolaceRecorder;
 import com.solace.quarkus.runtime.observability.SolaceMetricBinder;
 import com.solacesystems.jcsmp.JCSMPFactory;
+import com.solacesystems.jcsmp.JCSMPSession;
 
 import io.quarkus.arc.SyntheticCreationalContext;
 import io.quarkus.arc.deployment.*;

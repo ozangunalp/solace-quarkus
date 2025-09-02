@@ -1,6 +1,8 @@
 package com.solace.quarkus.messaging.outgoing;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
@@ -12,21 +14,12 @@ import jakarta.enterprise.inject.Instance;
 
 import org.eclipse.microprofile.reactive.messaging.Message;
 
-import com.solace.messaging.MessagingService;
-import com.solace.messaging.PersistentMessagePublisherBuilder;
-import com.solace.messaging.PubSubPlusClientException;
-import com.solace.messaging.config.SolaceConstants;
-import com.solace.messaging.config.SolaceProperties;
-import com.solace.messaging.publisher.OutboundMessage;
-import com.solace.messaging.publisher.OutboundMessageBuilder;
-import com.solace.messaging.publisher.PersistentMessagePublisher;
-import com.solace.messaging.publisher.PersistentMessagePublisher.PublishReceipt;
-import com.solace.messaging.publisher.PublisherHealthCheck;
-import com.solace.messaging.resources.Topic;
 import com.solace.quarkus.messaging.SolaceConnectorOutgoingConfiguration;
+import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
 import com.solace.quarkus.messaging.i18n.SolaceLogging;
 import com.solace.quarkus.messaging.tracing.SolaceOpenTelemetryInstrumenter;
 import com.solace.quarkus.messaging.tracing.SolaceTrace;
+import com.solacesystems.jcsmp.*;
 
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.opentelemetry.api.OpenTelemetry;
@@ -38,10 +31,9 @@ import io.smallrye.reactive.messaging.providers.helpers.MultiUtils;
 import io.vertx.core.json.Json;
 import io.vertx.mutiny.core.Vertx;
 
-public class SolaceOutgoingChannel
-        implements PersistentMessagePublisher.MessagePublishReceiptListener, PublisherHealthCheck.PublisherReadinessListener {
+public class SolaceOutgoingChannel implements JCSMPStreamingPublishCorrelatingEventHandler {
 
-    private final PersistentMessagePublisher publisher;
+    private final XMLMessageProducer publisher;
     private final String channel;
     private final Flow.Subscriber<? extends Message<?>> subscriber;
     private final Topic topic;
@@ -52,37 +44,44 @@ public class SolaceOutgoingChannel
     private final List<Throwable> failures = new ArrayList<>();
     private final SolaceOpenTelemetryInstrumenter solaceOpenTelemetryInstrumenter;
     private volatile boolean isPublisherReady = true;
-    private volatile MessagingService solace;
+    private volatile JCSMPSession solace;
+
+    private UniEmitter<Object> uniEmitter;
 
     // Assuming we won't ever exceed the limit of an unsigned long...
     private final OutgoingMessagesUnsignedCounterBarrier publishedMessagesTracker = new OutgoingMessagesUnsignedCounterBarrier();
 
     public SolaceOutgoingChannel(Vertx vertx, Instance<OpenTelemetry> openTelemetryInstance,
-            SolaceConnectorOutgoingConfiguration oc, MessagingService solace) {
+            SolaceConnectorOutgoingConfiguration oc, JCSMPSession solace) {
         this.solace = solace;
         this.channel = oc.getChannel();
-        PersistentMessagePublisherBuilder builder = solace.createPersistentMessagePublisherBuilder();
-        switch (oc.getProducerBackPressureStrategy()) {
-            case "wait":
-                builder.onBackPressureWait(oc.getProducerBackPressureBufferCapacity());
-                break;
-            case "reject":
-                builder.onBackPressureReject(oc.getProducerBackPressureBufferCapacity());
-                break;
-            default:
-                builder.onBackPressureElastic();
-                break;
-        }
+        //        PersistentMessagePublisherBuilder builder = solace.createPersistentMessagePublisherBuilder();
+        //        switch (oc.getProducerBackPressureStrategy()) {
+        //            case "wait":
+        //                builder.onBackPressureWait(oc.getProducerBackPressureBufferCapacity());
+        //                break;
+        //            case "reject":
+        //                builder.onBackPressureReject(oc.getProducerBackPressureBufferCapacity());
+        //                break;
+        //            default:
+        //                builder.onBackPressureElastic();
+        //                break;
+        //        }
         this.gracefulShutdown = oc.getClientGracefulShutdown();
         this.gracefulShutdownWaitTimeout = oc.getClientGracefulShutdownWaitTimeout();
-        oc.getProducerDeliveryAckTimeout().ifPresent(builder::withDeliveryAckTimeout);
-        oc.getProducerDeliveryAckWindowSize().ifPresent(builder::withDeliveryAckWindowSize);
-        this.publisher = builder.build();
-        if (oc.getProducerWaitForPublishReceipt()) {
-            publisher.setMessagePublishReceiptListener(this);
+        ProducerFlowProperties producerFlowProperties = new ProducerFlowProperties();
+        oc.getProducerDeliveryAckTimeout().ifPresent(producerFlowProperties::setPubAckTime);
+        oc.getProducerDeliveryAckWindowSize().ifPresent(producerFlowProperties::setWindowSize);
+        try {
+            this.publisher = this.solace.createProducer(producerFlowProperties, null);
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
+        //        if (oc.getProducerWaitForPublishReceipt()) {
+        //            publisher.setMessagePublishReceiptListener(this);
+        //        }
         boolean lazyStart = oc.getClientLazyStart();
-        this.topic = Topic.of(oc.getProducerTopic().orElse(this.channel));
+        this.topic = JCSMPFactory.onlyInstance().createTopic(oc.getProducerTopic().orElse(this.channel));
         if (oc.getClientTracingEnabled()) {
             solaceOpenTelemetryInstrumenter = SolaceOpenTelemetryInstrumenter.createForOutgoing(openTelemetryInstance);
         } else {
@@ -92,24 +91,24 @@ public class SolaceOutgoingChannel
                 m -> sendMessage(solace, m, oc.getProducerWaitForPublishReceipt(), oc.getClientTracingEnabled()).onFailure()
                         .invoke(this::reportFailure));
         this.subscriber = MultiUtils.via(processor, multi -> multi.plug(
-                m -> lazyStart ? m.onSubscription().call(() -> Uni.createFrom().completionStage(publisher.startAsync())) : m));
+                m -> lazyStart ? m.onSubscription().call(() -> Uni.createFrom().voidItem()) : m));
         if (!lazyStart) {
-            this.publisher.start();
+            //            this.publisher.start();
         }
 
-        this.publisher.setPublisherReadinessListener(new PublisherHealthCheck.PublisherReadinessListener() {
-            @Override
-            public void ready() {
-                isPublisherReady = true;
-            }
-        });
+        //        this.publisher.setPublisherReadinessListener(new PublisherHealthCheck.PublisherReadinessListener() {
+        //            @Override
+        //            public void ready() {
+        //                isPublisherReady = true;
+        //            }
+        //        });
     }
 
-    private Uni<Void> sendMessage(MessagingService solace, Message<?> m, boolean waitForPublishReceipt,
+    private Uni<Void> sendMessage(JCSMPSession solace, Message<?> m, boolean waitForPublishReceipt,
             boolean isTracingEnabled) {
 
         // TODO - Use isPublisherReady to check if publisher is in ready state before publishing. This is required when back-pressure is set to reject. We need to block this call till isPublisherReady is true
-        return publishMessage(publisher, m, solace.messageBuilder(), waitForPublishReceipt, isTracingEnabled)
+        return publishMessage(publisher, m, waitForPublishReceipt, isTracingEnabled)
                 .onItem().transformToUni(receipt -> {
                     alive.set(true);
                     if (receipt != null) {
@@ -132,98 +131,123 @@ public class SolaceOutgoingChannel
         failures.add(throwable);
     }
 
-    private Uni<PublishReceipt> publishMessage(PersistentMessagePublisher publisher, Message<?> m,
-            OutboundMessageBuilder msgBuilder, boolean waitForPublishReceipt, boolean isTracingEnabled) {
+    private Uni<Object> publishMessage(XMLMessageProducer publisher, Message<?> m, boolean waitForPublishReceipt,
+            boolean isTracingEnabled) {
         publishedMessagesTracker.increment();
         AtomicReference<Topic> topic = new AtomicReference<>(this.topic);
-        OutboundMessage outboundMessage;
+        BytesXMLMessage outboundMessage;
+        Object payload = m.getPayload();
+        if (payload instanceof BytesXMLMessage) {
+            outboundMessage = JCSMPFactory.onlyInstance().createMessage((BytesXMLMessage) payload);
+        } else {
+            outboundMessage = JCSMPFactory.onlyInstance().createBytesXMLMessage();
+        }
+        SDTMap map = JCSMPFactory.onlyInstance().createMap();
         m.getMetadata(SolaceOutboundMetadata.class).ifPresent(metadata -> {
-            if (metadata.getHttpContentHeaders() != null && !metadata.getHttpContentHeaders().isEmpty()) {
-                metadata.getHttpContentHeaders().forEach(msgBuilder::withHTTPContentHeader);
-            }
+            //            if (metadata.getHttpContentHeaders() != null && !metadata.getHttpContentHeaders().isEmpty()) {
+            //                metadata.getHttpContentHeaders().forEach(msgBuilder::withHTTPContentHeader);
+            //            }
             if (metadata.getProperties() != null && !metadata.getProperties().isEmpty()) {
-                metadata.getProperties().forEach(msgBuilder::withProperty);
+                //                metadata.getProperties().forEach(msgBuilder::withProperty);
+                for (String key : metadata.getProperties().keySet()) {
+                    try {
+                        map.putString(key, metadata.getProperties().get(key));
+                    } catch (SDTException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
             }
             if (metadata.getExpiration() != null) {
-                msgBuilder.withExpiration(metadata.getExpiration());
+                outboundMessage.setExpiration(metadata.getExpiration());
             }
             if (metadata.getPriority() != null) {
-                msgBuilder.withPriority(metadata.getPriority());
+                outboundMessage.setPriority(metadata.getPriority());
             }
             if (metadata.getSenderId() != null) {
-                msgBuilder.withSenderId(metadata.getSenderId());
+                outboundMessage.setSenderId(metadata.getSenderId());
             }
             if (metadata.getApplicationMessageType() != null) {
-                msgBuilder.withApplicationMessageType(metadata.getApplicationMessageType());
+                outboundMessage.setApplicationMessageType(metadata.getApplicationMessageType());
             }
             if (metadata.getTimeToLive() != null) {
-                msgBuilder.withTimeToLive(metadata.getTimeToLive());
+                outboundMessage.setTimeToLive(metadata.getTimeToLive());
             }
             if (metadata.getApplicationMessageId() != null) {
-                msgBuilder.withApplicationMessageId(metadata.getApplicationMessageId());
+                outboundMessage.setApplicationMessageId(metadata.getApplicationMessageId());
             }
             if (metadata.getClassOfService() != null) {
-                msgBuilder.withClassOfService(metadata.getClassOfService());
+                outboundMessage.setCos(Arrays.stream(User_Cos.values()).filter(co -> co.value() == metadata.getClassOfService())
+                        .findFirst().orElse(null));
             }
             if (metadata.getPartitionKey() != null) {
-                msgBuilder.withProperty(SolaceConstants.MessageUserPropertyConstants.QUEUE_PARTITION_KEY,
-                        metadata.getPartitionKey());
+                try {
+                    map.putString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY,
+                            metadata.getPartitionKey());
+                } catch (SDTException e) {
+                    throw new RuntimeException(e);
+                }
             }
             if (metadata.getCorrelationId() != null) {
-                msgBuilder.withProperty(SolaceProperties.MessageProperties.CORRELATION_ID, metadata.getCorrelationId());
+                outboundMessage.setCorrelationId(metadata.getCorrelationId());
             }
 
             if (metadata.getDynamicDestination() != null) {
-                topic.set(Topic.of(metadata.getDynamicDestination()));
+                topic.set(JCSMPFactory.onlyInstance().createTopic(metadata.getDynamicDestination()));
             }
         });
+        if (!map.isEmpty()) {
+            outboundMessage.setProperties(map);
+        }
 
-        Object payload = m.getPayload();
-        if (payload instanceof OutboundMessage) {
-            outboundMessage = (OutboundMessage) payload;
-        } else if (payload instanceof String) {
-            outboundMessage = msgBuilder
-                    .withHTTPContentHeader(HttpHeaderValues.TEXT_PLAIN.toString(), "")
-                    .build((String) payload);
+        if (payload instanceof String) {
+            outboundMessage.setHTTPContentEncoding(HttpHeaderValues.TEXT_PLAIN.toString());
+            outboundMessage.setHTTPContentType(HttpHeaderValues.TEXT_PLAIN.toString());
+            outboundMessage.writeAttachment(((String) payload).getBytes(StandardCharsets.UTF_8));
         } else if (payload instanceof byte[]) {
-            outboundMessage = msgBuilder.build((byte[]) payload);
+            outboundMessage.writeAttachment((byte[]) payload);
         } else {
-            outboundMessage = msgBuilder
-                    .withHTTPContentHeader(HttpHeaderValues.APPLICATION_JSON.toString(), "")
-                    .build(Json.encode(payload));
+            outboundMessage.setHTTPContentType(HttpHeaderValues.APPLICATION_JSON.toString());
+            outboundMessage.setHTTPContentEncoding(HttpHeaderValues.APPLICATION_JSON.toString());
+            outboundMessage.writeAttachment(Json.encode(payload).getBytes(StandardCharsets.UTF_8));
         }
 
         if (isTracingEnabled) {
-            SolaceTrace solaceTrace = new SolaceTrace.Builder()
-                    .withDestinationKind("topic")
-                    .withTopic(topic.get().getName())
-                    .withMessageID(outboundMessage.getApplicationMessageId())
-                    .withCorrelationID(outboundMessage.getCorrelationId())
-                    .withPartitionKey(
-                            outboundMessage
-                                    .hasProperty(SolaceConstants.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
-                                            ? outboundMessage
-                                                    .getProperty(
-                                                            SolaceConstants.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
-                                            : null)
-                    .withPayloadSize(Long.valueOf(outboundMessage.getPayloadAsBytes().length))
-                    .withProperties(outboundMessage.getProperties()).build();
+            SolaceTrace solaceTrace = null;
+            try {
+                solaceTrace = new SolaceTrace.Builder()
+                        .withDestinationKind("topic")
+                        .withTopic(topic.get().getName())
+                        .withMessageID(outboundMessage.getApplicationMessageId())
+                        .withCorrelationID(outboundMessage.getCorrelationId())
+                        .withPartitionKey(
+                                outboundMessage.getProperties()
+                                        .containsKey(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
+                                                ? outboundMessage.getProperties()
+                                                        .getString(
+                                                                XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
+                                                : null)
+                        .withPayloadSize(Long.valueOf(SolaceMessageUtils.getPayloadAsBytes(outboundMessage).length))
+                        .withProperties(SolaceMessageUtils.getPropertiesMap(outboundMessage.getProperties())).build();
+            } catch (SDTException e) {
+                throw new RuntimeException(e);
+            }
             solaceOpenTelemetryInstrumenter.traceOutgoing(m, solaceTrace);
         }
 
-        return Uni.createFrom().<PublishReceipt> emitter(e -> {
+        return Uni.createFrom().<Object> emitter(e -> {
             boolean exitExceptionally = false;
             try {
                 if (isPublisherReady) {
                     if (waitForPublishReceipt) {
-                        publisher.publish(outboundMessage, topic.get(), e);
+                        this.uniEmitter = e;
+                        publisher.send(outboundMessage, topic.get());
                     } else {
-                        publisher.publish(outboundMessage, topic.get());
+                        publisher.send(outboundMessage, topic.get());
                         e.complete(null);
                         publishedMessagesTracker.decrement();
                     }
                 }
-            } catch (PubSubPlusClientException.PublisherOverflowException publisherOverflowException) {
+            } catch (Exception publisherOverflowException) {
                 isPublisherReady = false;
                 exitExceptionally = true;
                 e.fail(publisherOverflowException);
@@ -231,7 +255,7 @@ public class SolaceOutgoingChannel
                 e.fail(t);
             } finally {
                 if (exitExceptionally) {
-                    publisher.notifyWhenReady();
+                    //                    publisher.notifyWhenReady();
                 }
             }
         }).invoke(() -> SolaceLogging.log.successfullyToTopic(channel, topic.get().getName()));
@@ -262,27 +286,15 @@ public class SolaceOutgoingChannel
             processor.cancel();
         }
 
-        publisher.terminate(5000);
-    }
-
-    @Override
-    public void onPublishReceipt(PublishReceipt publishReceipt) {
-        UniEmitter<PublishReceipt> uniEmitter = (UniEmitter<PublishReceipt>) publishReceipt.getUserContext();
-        PubSubPlusClientException exception = publishReceipt.getException();
-        if (exception != null) {
-            uniEmitter.fail(exception);
-        } else {
-            publishedMessagesTracker.decrement();
-            uniEmitter.complete(publishReceipt);
-        }
+        publisher.close();
     }
 
     public void isStarted(HealthReport.HealthReportBuilder builder) {
-        builder.add(channel, solace.isConnected());
+        builder.add(channel, !solace.isClosed());
     }
 
     public void isReady(HealthReport.HealthReportBuilder builder) {
-        builder.add(channel, solace.isConnected() && this.publisher != null && this.publisher.isReady());
+        builder.add(channel, !solace.isClosed() && this.publisher != null && !this.publisher.isClosed());
     }
 
     public void isAlive(HealthReport.HealthReportBuilder builder) {
@@ -291,16 +303,26 @@ public class SolaceOutgoingChannel
             synchronized (this) {
                 reportedFailures = new ArrayList<>(failures);
             }
-            System.out.println(reportedFailures);
-            builder.add(channel, solace.isConnected() && alive.get(),
+            builder.add(channel, !solace.isClosed() && alive.get(),
                     reportedFailures.stream().map(Throwable::getMessage).collect(Collectors.joining()));
         } else {
-            builder.add(channel, solace.isConnected() && alive.get());
+            builder.add(channel, !solace.isClosed() && alive.get());
         }
     }
 
     @Override
-    public void ready() {
-        isPublisherReady = true;
+    public void responseReceivedEx(Object o) {
+        if (uniEmitter != null) {
+            publishedMessagesTracker.decrement();
+            uniEmitter.complete("SUCCESS");
+        }
+
+    }
+
+    @Override
+    public void handleErrorEx(Object o, JCSMPException e, long l) {
+        if (uniEmitter != null) {
+            uniEmitter.fail(e);
+        }
     }
 }

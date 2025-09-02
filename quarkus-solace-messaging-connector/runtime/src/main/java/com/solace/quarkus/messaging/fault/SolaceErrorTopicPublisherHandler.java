@@ -1,24 +1,28 @@
 package com.solace.quarkus.messaging.fault;
+
 import com.solace.quarkus.messaging.i18n.SolaceLogging;
 import com.solace.quarkus.messaging.incoming.SolaceInboundMessage;
-
 import com.solacesystems.jcsmp.*;
+
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.subscription.UniEmitter;
 
-class SolaceErrorTopicPublisherHandler implements JCSMPStreamingPublishCorrelatingEventHandler {
+import java.util.concurrent.CountDownLatch;
+
+class SolaceErrorTopicPublisherHandler implements JCSMPStreamingPublishCorrelatingEventHandler{
 
     private final JCSMPSession solace;
     private final XMLMessageProducer publisher;
     private final OutboundErrorMessageMapper outboundErrorMessageMapper;
-
     private UniEmitter<Object> uniEmitter;
+
+    CountDownLatch latch = new CountDownLatch(1);
 
     public SolaceErrorTopicPublisherHandler(JCSMPSession solace) {
         this.solace = solace;
 
         try {
-            publisher = solace.getMessageProducer(null);
+            publisher = solace.getMessageProducer(this);
         } catch (JCSMPException e) {
             throw new RuntimeException(e);
         }

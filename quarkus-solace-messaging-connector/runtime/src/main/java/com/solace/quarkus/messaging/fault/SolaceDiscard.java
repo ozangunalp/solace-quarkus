@@ -2,15 +2,13 @@ package com.solace.quarkus.messaging.fault;
 
 import java.util.concurrent.CompletionStage;
 
-import com.solacesystems.jcsmp.JCSMPException;
-import com.solacesystems.jcsmp.XMLMessage;
 import org.eclipse.microprofile.reactive.messaging.Metadata;
 
-import com.solace.messaging.config.MessageAcknowledgementConfiguration;
-import com.solace.messaging.receiver.AcknowledgementSupport;
 import com.solace.quarkus.messaging.i18n.SolaceLogging;
 import com.solace.quarkus.messaging.incoming.SettleMetadata;
 import com.solace.quarkus.messaging.incoming.SolaceInboundMessage;
+import com.solacesystems.jcsmp.JCSMPException;
+import com.solacesystems.jcsmp.XMLMessage;
 
 import io.smallrye.mutiny.Uni;
 

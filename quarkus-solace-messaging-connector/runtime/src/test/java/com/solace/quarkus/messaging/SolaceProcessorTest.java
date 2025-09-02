@@ -3,6 +3,7 @@ package com.solace.quarkus.messaging;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -12,14 +13,10 @@ import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.eclipse.microprofile.reactive.messaging.Outgoing;
 import org.junit.jupiter.api.Test;
 
-import com.solace.messaging.publisher.OutboundMessage;
-import com.solace.messaging.publisher.PersistentMessagePublisher;
-import com.solace.messaging.receiver.InboundMessage;
-import com.solace.messaging.receiver.PersistentMessageReceiver;
-import com.solace.messaging.resources.Queue;
-import com.solace.messaging.resources.Topic;
-import com.solace.messaging.resources.TopicSubscription;
+import com.solace.quarkus.messaging.base.SolaceContainer;
 import com.solace.quarkus.messaging.base.WeldTestBase;
+import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
+import com.solacesystems.jcsmp.*;
 
 import io.smallrye.reactive.messaging.test.common.config.MapBasedConfig;
 
@@ -41,23 +38,52 @@ public class SolaceProcessorTest extends WeldTestBase {
 
         List<String> expected = new CopyOnWriteArrayList<>();
 
-        // Start listening processed messages
-        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
-                .withSubscriptions(TopicSubscription.of(processedTopic))
-                .build(Queue.nonDurableExclusiveQueue());
-        receiver.receiveAsync(inboundMessage -> expected.add(inboundMessage.getPayloadAsString()));
-        receiver.start();
+        try {
+            // Start listening first
+            EndpointProperties endpointProperties = new EndpointProperties();
+            endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+            Queue queue = session.createTemporaryQueue();
+            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
+
+            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                    expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
+                }
+
+                @Override
+                public void onException(JCSMPException e) {
+
+                }
+            });
+            session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
+                    JCSMPSession.WAIT_FOR_CONFIRM);
+            receiver.start();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         // Produce messages
-        PersistentMessagePublisher publisher = messagingService.createPersistentMessagePublisherBuilder()
-                .build()
-                .start();
-        Topic tp = Topic.of(topic);
-        publisher.publish("1", tp);
-        publisher.publish("2", tp);
-        publisher.publish("3", tp);
-        publisher.publish("4", tp);
-        publisher.publish("5", tp);
+        XMLMessageProducer publisher = null;
+        try {
+            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
+            Topic tp = JCSMPFactory.onlyInstance().createTopic(SolaceContainer.INTEGRATION_TEST_QUEUE_SUBSCRIPTION);
+            for (int i = 1; i <= 5; i++) {
+                sendTextMessage(Integer.toString(i), publisher, tp);
+            }
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         // Assert on received messages
         await().untilAsserted(() -> assertThat(app.getReceived()).contains("1", "2", "3", "4", "5"));
@@ -71,14 +97,27 @@ public class SolaceProcessorTest extends WeldTestBase {
 
         @Incoming("in")
         @Outgoing("out")
-        OutboundMessage in(InboundMessage msg) {
-            String payload = msg.getPayloadAsString();
+        BytesXMLMessage in(BytesXMLMessage msg) {
+            String payload = SolaceMessageUtils.getPayloadAsString(msg);
             received.add(payload);
-            return messagingService.messageBuilder().build(payload);
+            BytesXMLMessage bytesXMLMessage = JCSMPFactory.onlyInstance().createMessage(BytesXMLMessage.class);
+            bytesXMLMessage.writeAttachment(payload.getBytes(StandardCharsets.UTF_8));
+            return bytesXMLMessage;
         }
 
         public List<String> getReceived() {
             return received;
+        }
+    }
+
+    private void sendTextMessage(String payload, XMLMessageProducer publisher, Topic tp) {
+        TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+        textMessage.setText(payload);
+        textMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+        try {
+            publisher.send(textMessage, tp);
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
     }
 }

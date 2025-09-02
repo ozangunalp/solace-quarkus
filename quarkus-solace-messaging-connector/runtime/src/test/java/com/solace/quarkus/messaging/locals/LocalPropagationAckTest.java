@@ -14,10 +14,10 @@ import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Message;
 import org.junit.jupiter.api.Test;
 
-import com.solace.messaging.publisher.PersistentMessagePublisher;
-import com.solace.messaging.resources.Topic;
 import com.solace.quarkus.messaging.SolaceConnector;
 import com.solace.quarkus.messaging.base.WeldTestBase;
+import com.solacesystems.jcsmp.*;
+import com.solacesystems.jcsmp.Topic;
 
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.smallrye.mutiny.Multi;
@@ -37,15 +37,26 @@ public class LocalPropagationAckTest extends WeldTestBase {
     }
 
     private void sendMessages() {
-        PersistentMessagePublisher publisher = messagingService.createPersistentMessagePublisherBuilder()
-                .build()
-                .start();
-        Topic tp = Topic.of(topic);
-        for (int i = 0; i < 5; i++) {
-            publisher.publish(messagingService.messageBuilder()
-                    .withHTTPContentHeader(HttpHeaderValues.TEXT_PLAIN.toString(), "")
-                    .build(String.valueOf(i + 1)),
-                    tp);
+        // Produce messages
+        XMLMessageProducer publisher = null;
+        try {
+            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
+            Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
+            for (int i = 1; i <= 5; i++) {
+                sendTextMessage(Integer.toString(i), publisher, tp);
+            }
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -100,6 +111,19 @@ public class LocalPropagationAckTest extends WeldTestBase {
 
         List<Integer> getResults() {
             return list;
+        }
+    }
+
+    private void sendTextMessage(String payload, XMLMessageProducer publisher, Topic tp) {
+        TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+        textMessage.setText(payload);
+        textMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+        textMessage.setHTTPContentEncoding(HttpHeaderValues.TEXT_PLAIN.toString());
+        textMessage.setHTTPContentType(HttpHeaderValues.TEXT_PLAIN.toString());
+        try {
+            publisher.send(textMessage, tp);
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
     }
 

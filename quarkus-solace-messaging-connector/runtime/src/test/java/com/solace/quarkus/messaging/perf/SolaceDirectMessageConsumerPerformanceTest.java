@@ -13,10 +13,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.junit.jupiter.api.Test;
 
-import com.solace.messaging.publisher.DirectMessagePublisher;
-import com.solace.messaging.resources.Topic;
 import com.solace.quarkus.messaging.base.WeldTestBase;
 import com.solace.quarkus.messaging.incoming.SolaceInboundMessage;
+import com.solacesystems.jcsmp.*;
+import com.solacesystems.jcsmp.Topic;
 
 import io.smallrye.reactive.messaging.test.common.config.MapBasedConfig;
 
@@ -26,11 +26,6 @@ public class SolaceDirectMessageConsumerPerformanceTest extends WeldTestBase {
 
     @Test
     public void solaceConsumerPerformanceTest() {
-        // Produce messages
-        DirectMessagePublisher publisher = messagingService.createDirectMessagePublisherBuilder()
-                .build()
-                .start();
-
         MapBasedConfig config = commonConfig()
                 .with("mp.messaging.incoming.in.client.type", "direct")
                 .with("mp.messaging.incoming.in.connector", "quarkus-solace")
@@ -41,9 +36,17 @@ public class SolaceDirectMessageConsumerPerformanceTest extends WeldTestBase {
 
         await().until(() -> isStarted() && isReady());
 
-        Topic tp = Topic.of(topic);
-        for (int i = 0; i < COUNT; i++) {
-            publisher.publish(String.valueOf(i + 1), tp);
+        // Produce messages
+        XMLMessageProducer publisher = null;
+        Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
+        try {
+            publisher = session.getMessageProducer(null);
+
+            for (int i = 0; i < COUNT; i++) {
+                sendTextMessage(Integer.toString(i + 1), publisher, tp);
+            }
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
 
         await()
@@ -81,6 +84,17 @@ public class SolaceDirectMessageConsumerPerformanceTest extends WeldTestBase {
 
         public long getCount() {
             return count.longValue();
+        }
+    }
+
+    private void sendTextMessage(String payload, XMLMessageProducer publisher, Topic tp) {
+        TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+        textMessage.setText(payload);
+        textMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+        try {
+            publisher.send(textMessage, tp);
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
     }
 }

@@ -1,8 +1,8 @@
 package com.solace.quarkus.messaging.converters;
 
-import org.osgi.annotation.versioning.ProviderType;
-
 import java.io.Serializable;
+
+import org.osgi.annotation.versioning.ProviderType;
 
 @ProviderType
 public interface Converter {

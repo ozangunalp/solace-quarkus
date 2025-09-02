@@ -1,8 +1,8 @@
 package com.solace.quarkus;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import com.solacesystems.jcsmp.JCSMPProperties;
 
+import com.solacesystems.jcsmp.JCSMPProperties;
 
 @ApplicationScoped
 public class SolaceCustomizer implements MessagingServiceClientCustomizer {

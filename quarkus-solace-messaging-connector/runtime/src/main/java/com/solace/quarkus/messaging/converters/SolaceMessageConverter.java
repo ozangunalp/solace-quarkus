@@ -2,12 +2,12 @@ package com.solace.quarkus.messaging.converters;
 
 import java.lang.reflect.Type;
 
-import com.solacesystems.jcsmp.BytesXMLMessage;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import org.eclipse.microprofile.reactive.messaging.Message;
 
 import com.solace.quarkus.messaging.incoming.SolaceInboundMetadata;
+import com.solacesystems.jcsmp.BytesXMLMessage;
 
 import io.smallrye.reactive.messaging.MessageConverter;
 import io.smallrye.reactive.messaging.providers.helpers.TypeUtils;

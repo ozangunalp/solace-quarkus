@@ -1,12 +1,12 @@
 package com.solace.quarkus;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import com.solacesystems.jcsmp.*;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+
+import com.solacesystems.jcsmp.*;
 
 import io.quarkus.runtime.ShutdownEvent;
 
@@ -47,7 +47,8 @@ public class SolaceConsumer {
         endpoint_props.setQuota(0);
         solace.provision(queue, endpoint_props, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
         try {
-            solace.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic("hello/persistent"), JCSMPSession.WAIT_FOR_CONFIRM);
+            solace.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic("hello/persistent"),
+                    JCSMPSession.WAIT_FOR_CONFIRM);
         } catch (JCSMPException e) {
         }
 

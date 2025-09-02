@@ -7,12 +7,12 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import com.solace.quarkus.messaging.converters.SolaceMessageTypeConverter;
-import com.solacesystems.jcsmp.BytesXMLMessage;
 import org.eclipse.microprofile.reactive.messaging.Metadata;
 
+import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
 import com.solace.quarkus.messaging.fault.SolaceFailureHandler;
 import com.solace.quarkus.messaging.i18n.SolaceLogging;
+import com.solacesystems.jcsmp.BytesXMLMessage;
 
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.smallrye.mutiny.Uni;
@@ -25,21 +25,19 @@ public class SolaceInboundMessage<T> implements ContextAwareMessage<T>, Metadata
     private final BytesXMLMessage msg;
     private final SolaceAckHandler ackHandler;
     private final SolaceFailureHandler nackHandler;
-    private final SolaceMessageTypeConverter solaceMessageTypeConverter;
     private final T payload;
     private final IncomingMessagesUnsignedCounterBarrier unacknowledgedMessageTracker;
     private final Consumer<Throwable> reportFailure;
     private Metadata metadata;
 
     public SolaceInboundMessage(BytesXMLMessage message, SolaceAckHandler ackHandler, SolaceFailureHandler nackHandler,
-                                IncomingMessagesUnsignedCounterBarrier unacknowledgedMessageTracker, Consumer<Throwable> reportFailure) {
+            IncomingMessagesUnsignedCounterBarrier unacknowledgedMessageTracker, Consumer<Throwable> reportFailure) {
         this.msg = message;
         this.unacknowledgedMessageTracker = unacknowledgedMessageTracker;
         this.payload = (T) convertPayload();
         this.ackHandler = ackHandler;
         this.nackHandler = nackHandler;
-        this.solaceMessageTypeConverter = new SolaceMessageTypeConverter();
-        this.metadata = captureContextMetadata(new SolaceInboundMetadata(message, this.solaceMessageTypeConverter));
+        this.metadata = captureContextMetadata(new SolaceInboundMetadata(message));
         this.reportFailure = reportFailure;
     }
 
@@ -56,7 +54,7 @@ public class SolaceInboundMessage<T> implements ContextAwareMessage<T>, Metadata
         // Neither of these are guaranteed to be non-null
         final String contentType = msg.getHTTPContentType();
         final String contentEncoding = msg.getHTTPContentEncoding();
-        final Buffer body = Buffer.buffer(this.solaceMessageTypeConverter.getPayloadAsBytes(msg));
+        final Buffer body = Buffer.buffer(SolaceMessageUtils.getPayloadAsBytes(msg));
 
         // If there is a content encoding specified, we don't try to unwrap
         if (contentEncoding == null || contentEncoding.isBlank()) {

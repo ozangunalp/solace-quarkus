@@ -6,8 +6,6 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Flow;
 
-import com.solacesystems.jcsmp.JCSMPException;
-import com.solacesystems.jcsmp.JCSMPSession;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -25,6 +23,7 @@ import com.solace.quarkus.messaging.incoming.SolaceDirectMessageIncomingChannel;
 import com.solace.quarkus.messaging.incoming.SolaceIncomingChannel;
 import com.solace.quarkus.messaging.outgoing.SolaceDirectMessageOutgoingChannel;
 import com.solace.quarkus.messaging.outgoing.SolaceOutgoingChannel;
+import com.solacesystems.jcsmp.JCSMPSession;
 
 import io.opentelemetry.api.OpenTelemetry;
 import io.smallrye.reactive.messaging.annotations.ConnectorAttribute;
@@ -108,12 +107,8 @@ public class SolaceConnector implements InboundConnector, OutboundConnector, Hea
         var ic = new SolaceConnectorIncomingConfiguration(config);
         if (ic.getClientType().equals("direct")) {
             SolaceDirectMessageIncomingChannel channel = null;
-            try {
-                channel = new SolaceDirectMessageIncomingChannel(vertx, openTelemetryInstance,
-                        ic, solace);
-            } catch (JCSMPException e) {
-                throw new RuntimeException(e);
-            }
+            channel = new SolaceDirectMessageIncomingChannel(vertx, openTelemetryInstance,
+                    ic, solace);
             directMessageIncomingChannels.add(channel);
             return channel.getStream();
         } else {

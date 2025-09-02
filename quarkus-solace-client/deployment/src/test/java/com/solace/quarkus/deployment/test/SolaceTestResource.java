@@ -18,8 +18,8 @@ public class SolaceTestResource implements QuarkusTestResourceLifecycleManager {
         container.start();
         return Map.of("quarkus.solace.host", container.getHost() + ":" + container.getMappedPort(55555),
                 "quarkus.solace.vpn", "default",
-                "quarkus.solace.authentication.basic.username", "user",
-                "quarkus.solace.authentication.basic.password", "pass");
+                "quarkus.solace.username", "user",
+                "quarkus.solace.password", "pass");
     }
 
     @Override

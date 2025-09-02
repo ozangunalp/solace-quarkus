@@ -14,9 +14,9 @@ import org.eclipse.microprofile.reactive.messaging.Message;
 import org.eclipse.microprofile.reactive.messaging.Outgoing;
 import org.junit.jupiter.api.Test;
 
-import com.solace.messaging.receiver.DirectMessageReceiver;
-import com.solace.messaging.resources.TopicSubscription;
 import com.solace.quarkus.messaging.base.WeldTestBase;
+import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
+import com.solacesystems.jcsmp.*;
 
 import io.smallrye.mutiny.Multi;
 import io.smallrye.reactive.messaging.test.common.config.MapBasedConfig;
@@ -75,14 +75,24 @@ public class SolaceDirectMessagePublisherPerformanceTest extends WeldTestBase {
 
         List<String> received = new CopyOnWriteArrayList<>();
 
-        // Start listening first
-        DirectMessageReceiver receiver = messagingService.createDirectMessageReceiverBuilder()
-                .withSubscriptions(TopicSubscription.of(topic))
-                .build();
-        receiver.receiveAsync(inboundMessage -> {
-            received.add(inboundMessage.getPayloadAsString());
-        });
-        receiver.start();
+        try {
+            // Start listening first
+            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                    received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
+                }
+
+                @Override
+                public void onException(JCSMPException e) {
+
+                }
+            });
+            session.addSubscription(JCSMPFactory.onlyInstance().createTopic(topic));
+            receiver.start();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         // Run app that publish messages
         MyApp app = runApplication(config, MyApp.class);
@@ -152,14 +162,24 @@ public class SolaceDirectMessagePublisherPerformanceTest extends WeldTestBase {
 
         List<String> received = new CopyOnWriteArrayList<>();
 
-        // Start listening first
-        DirectMessageReceiver receiver = messagingService.createDirectMessageReceiverBuilder()
-                .withSubscriptions(TopicSubscription.of(topic))
-                .build();
-        receiver.receiveAsync(inboundMessage -> {
-            received.add(inboundMessage.getPayloadAsString());
-        });
-        receiver.start();
+        try {
+            // Start listening first
+            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                    received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
+                }
+
+                @Override
+                public void onException(JCSMPException e) {
+
+                }
+            });
+            session.addSubscription(JCSMPFactory.onlyInstance().createTopic(topic));
+            receiver.start();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         // Run app that publish messages
         MyApp app = runApplication(config, MyApp.class);

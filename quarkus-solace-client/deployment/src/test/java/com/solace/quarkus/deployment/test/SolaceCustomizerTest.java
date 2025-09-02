@@ -4,10 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.solacesystems.jcsmp.JCSMPException;
-import com.solacesystems.jcsmp.JCSMPProperties;
-import com.solacesystems.jcsmp.JCSMPSession;
-import com.solacesystems.jcsmp.XMLMessageProducer;
+import com.solacesystems.jcsmp.*;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
@@ -35,15 +32,25 @@ public class SolaceCustomizerTest {
     @Test
     public void test() {
         try {
-            XMLMessageProducer prod = solace.getMessageProducer(null);
+            XMLMessageProducer prod = solace.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
             assertThat(customizer.called()).isTrue();
             prod.close();
         } catch (JCSMPException e) {
             throw new RuntimeException(e);
         }
 
-//        DirectMessagePublisher publisher = solace.createDirectMessagePublisherBuilder()
-//                .build().start();
+        //        DirectMessagePublisher publisher = solace.createDirectMessagePublisherBuilder()
+        //                .build().start();
     }
 
     @Singleton

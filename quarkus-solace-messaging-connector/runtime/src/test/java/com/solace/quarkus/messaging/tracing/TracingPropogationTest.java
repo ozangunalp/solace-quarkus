@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -19,15 +20,12 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.solace.messaging.publisher.OutboundMessage;
-import com.solace.messaging.publisher.PersistentMessagePublisher;
-import com.solace.messaging.receiver.InboundMessage;
-import com.solace.messaging.receiver.PersistentMessageReceiver;
-import com.solace.messaging.resources.Queue;
-import com.solace.messaging.resources.Topic;
-import com.solace.messaging.resources.TopicSubscription;
 import com.solace.quarkus.messaging.base.WeldTestBase;
+import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
 import com.solace.quarkus.messaging.incoming.SolaceInboundMetadata;
+import com.solacesystems.jcsmp.*;
+import com.solacesystems.jcsmp.Queue;
+import com.solacesystems.jcsmp.Topic;
 
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.trace.SpanKind;
@@ -85,15 +83,16 @@ public class TracingPropogationTest extends WeldTestBase {
         MyConsumer app = runApplication(config, MyConsumer.class);
 
         // Produce messages
-        PersistentMessagePublisher publisher = messagingService.createPersistentMessagePublisherBuilder()
-                .build()
-                .start();
-        Topic tp = Topic.of("quarkus/integration/test/replay/messages");
-        publisher.publish("1", tp);
-        publisher.publish("2", tp);
-        publisher.publish("3", tp);
-        publisher.publish("4", tp);
-        publisher.publish("5", tp);
+        XMLMessageProducer publisher = null;
+        try {
+            publisher = session.getMessageProducer(null);
+            Topic tp = JCSMPFactory.onlyInstance().createTopic("quarkus/integration/test/replay/messages");
+            for (int i = 1; i <= 5; i++) {
+                sendTextMessage(Integer.toString(i), publisher, tp);
+            }
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         // Assert on published messages
         await().untilAsserted(() -> assertThat(app.getReceived()).contains("1", "2", "3", "4", "5"));
@@ -119,12 +118,29 @@ public class TracingPropogationTest extends WeldTestBase {
 
         List<String> expected = new CopyOnWriteArrayList<>();
 
-        // Start listening first
-        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
-                .withSubscriptions(TopicSubscription.of(topic))
-                .build(Queue.nonDurableExclusiveQueue());
-        receiver.receiveAsync(inboundMessage -> expected.add(inboundMessage.getPayloadAsString()));
-        receiver.start();
+        // Start listening processed messages
+        try {
+            EndpointProperties endpointProperties = new EndpointProperties();
+            endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+            Queue queue = session.createTemporaryQueue();
+            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
+            // Start listening first
+            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                    expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
+                }
+
+                @Override
+                public void onException(JCSMPException e) {
+
+                }
+            });
+            session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(topic), JCSMPSession.WAIT_FOR_CONFIRM);
+            receiver.start();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         // Run app that publish messages
         MyApp app = runApplication(config, MyApp.class);
@@ -165,22 +181,42 @@ public class TracingPropogationTest extends WeldTestBase {
         List<String> expected = new CopyOnWriteArrayList<>();
 
         // Start listening processed messages
-        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
-                .withSubscriptions(TopicSubscription.of(processedTopic))
-                .build(Queue.nonDurableExclusiveQueue());
-        receiver.receiveAsync(inboundMessage -> expected.add(inboundMessage.getPayloadAsString()));
-        receiver.start();
+        try {
+            EndpointProperties endpointProperties = new EndpointProperties();
+            endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+            Queue queue = session.createTemporaryQueue();
+            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
+            // Start listening first
+            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                    expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
+                }
+
+                @Override
+                public void onException(JCSMPException e) {
+
+                }
+            });
+            session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
+                    JCSMPSession.WAIT_FOR_CONFIRM);
+            receiver.start();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         // Produce messages
-        PersistentMessagePublisher publisher = messagingService.createPersistentMessagePublisherBuilder()
-                .build()
-                .start();
-        Topic tp = Topic.of(topic);
-        publisher.publish("1", tp);
-        publisher.publish("2", tp);
-        publisher.publish("3", tp);
-        publisher.publish("4", tp);
-        publisher.publish("5", tp);
+        // Produce messages
+        XMLMessageProducer publisher = null;
+        try {
+            publisher = session.getMessageProducer(null);
+            Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
+            for (int i = 1; i <= 5; i++) {
+                sendTextMessage(Integer.toString(i), publisher, tp);
+            }
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         // Assert on received messages
         await().untilAsserted(() -> assertThat(app.getReceived()).contains("1", "2", "3", "4", "5"));
@@ -243,14 +279,27 @@ public class TracingPropogationTest extends WeldTestBase {
 
         @Incoming("in")
         @Outgoing("out")
-        OutboundMessage in(InboundMessage msg) {
-            String payload = msg.getPayloadAsString();
+        BytesXMLMessage in(BytesXMLMessage msg) {
+            String payload = SolaceMessageUtils.getPayloadAsString(msg);
             received.add(payload);
-            return messagingService.messageBuilder().build(payload);
+            BytesXMLMessage bytesXMLMessage = JCSMPFactory.onlyInstance().createBytesXMLMessage();
+            bytesXMLMessage.writeAttachment(payload.getBytes(StandardCharsets.UTF_8));
+            return bytesXMLMessage;
         }
 
         public List<String> getReceived() {
             return received;
+        }
+    }
+
+    private void sendTextMessage(String payload, XMLMessageProducer publisher, Topic tp) {
+        TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+        textMessage.setText(payload);
+        textMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+        try {
+            publisher.send(textMessage, tp);
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
     }
 }

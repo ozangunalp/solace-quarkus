@@ -15,13 +15,10 @@ import org.eclipse.microprofile.reactive.messaging.Outgoing;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
-import com.solace.messaging.publisher.PersistentMessagePublisher;
-import com.solace.messaging.receiver.PersistentMessageReceiver;
-import com.solace.messaging.resources.Queue;
-import com.solace.messaging.resources.Topic;
-import com.solace.messaging.resources.TopicSubscription;
 import com.solace.quarkus.messaging.base.WeldTestBase;
+import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
 import com.solace.quarkus.messaging.incoming.SolaceInboundMessage;
+import com.solacesystems.jcsmp.*;
 
 import io.smallrye.mutiny.Multi;
 import io.smallrye.reactive.messaging.annotations.Blocking;
@@ -50,22 +47,51 @@ public class EndToEndPerformanceTest extends WeldTestBase {
         runApplication(config, MyProcessor.class);
 
         List<String> received = new CopyOnWriteArrayList<>();
+        try {
+            EndpointProperties endpointProperties = new EndpointProperties();
+            endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+            Queue queue = session.createTemporaryQueue();
+            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
+            // Start listening first
+            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                    received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
+                }
 
-        // Start listening processed messages
-        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
-                .withMessageAutoAcknowledgement()
-                .withSubscriptions(TopicSubscription.of(processedTopic))
-                .build(Queue.nonDurableExclusiveQueue());
-        receiver.receiveAsync(inboundMessage -> received.add(inboundMessage.getPayloadAsString()));
-        receiver.start();
+                @Override
+                public void onException(JCSMPException e) {
+
+                }
+            });
+            session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
+                    JCSMPSession.WAIT_FOR_CONFIRM);
+            receiver.start();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         // Produce messages
-        PersistentMessagePublisher publisher = messagingService.createPersistentMessagePublisherBuilder()
-                .build()
-                .start();
-        Topic tp = Topic.of(topic);
-        for (int i = 0; i < COUNT; i++) {
-            publisher.publish(String.valueOf(i + 1), tp);
+        XMLMessageProducer publisher = null;
+        Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
+        try {
+            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
+
+            for (int i = 0; i < COUNT; i++) {
+                sendTextMessage(Integer.toString(i + 1), publisher, tp);
+            }
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
 
         await()
@@ -91,21 +117,51 @@ public class EndToEndPerformanceTest extends WeldTestBase {
 
         List<String> received = new CopyOnWriteArrayList<>();
 
-        // Start listening processed messages
-        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
-                .withMessageAutoAcknowledgement()
-                .withSubscriptions(TopicSubscription.of(processedTopic))
-                .build(Queue.nonDurableExclusiveQueue());
-        receiver.receiveAsync(inboundMessage -> received.add(inboundMessage.getPayloadAsString()));
-        receiver.start();
+        try {
+            EndpointProperties endpointProperties = new EndpointProperties();
+            endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+            Queue queue = session.createTemporaryQueue();
+            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
+            // Start listening first
+            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                    received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
+                }
+
+                @Override
+                public void onException(JCSMPException e) {
+
+                }
+            });
+            session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
+                    JCSMPSession.WAIT_FOR_CONFIRM);
+            receiver.start();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         // Produce messages
-        PersistentMessagePublisher publisher = messagingService.createPersistentMessagePublisherBuilder()
-                .build()
-                .start();
-        Topic tp = Topic.of(topic);
-        for (int i = 0; i < COUNT; i++) {
-            publisher.publish(String.valueOf(i + 1), tp);
+        XMLMessageProducer publisher = null;
+        Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
+        try {
+            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
+
+            for (int i = 0; i < COUNT; i++) {
+                sendTextMessage(Integer.toString(i + 1), publisher, tp);
+            }
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
 
         await()
@@ -132,21 +188,51 @@ public class EndToEndPerformanceTest extends WeldTestBase {
 
         List<String> received = new CopyOnWriteArrayList<>();
 
-        // Start listening processed messages
-        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
-                .withMessageAutoAcknowledgement()
-                .withSubscriptions(TopicSubscription.of(processedTopic))
-                .build(Queue.nonDurableExclusiveQueue());
-        receiver.receiveAsync(inboundMessage -> received.add(inboundMessage.getPayloadAsString()));
-        receiver.start();
+        try {
+            EndpointProperties endpointProperties = new EndpointProperties();
+            endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+            Queue queue = session.createTemporaryQueue();
+            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
+            // Start listening first
+            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                    received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
+                }
+
+                @Override
+                public void onException(JCSMPException e) {
+
+                }
+            });
+            session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
+                    JCSMPSession.WAIT_FOR_CONFIRM);
+            receiver.start();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         // Produce messages
-        PersistentMessagePublisher publisher = messagingService.createPersistentMessagePublisherBuilder()
-                .build()
-                .start();
-        Topic tp = Topic.of(topic);
-        for (int i = 0; i < COUNT; i++) {
-            publisher.publish(String.valueOf(i + 1), tp);
+        XMLMessageProducer publisher = null;
+        Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
+        try {
+            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
+
+            for (int i = 0; i < COUNT; i++) {
+                sendTextMessage(Integer.toString(i + 1), publisher, tp);
+            }
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
 
         await()
@@ -174,21 +260,51 @@ public class EndToEndPerformanceTest extends WeldTestBase {
 
         List<String> received = new CopyOnWriteArrayList<>();
 
-        // Start listening processed messages
-        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
-                .withMessageAutoAcknowledgement()
-                .withSubscriptions(TopicSubscription.of(processedTopic))
-                .build(Queue.nonDurableExclusiveQueue());
-        receiver.receiveAsync(inboundMessage -> received.add(inboundMessage.getPayloadAsString()));
-        receiver.start();
+        try {
+            EndpointProperties endpointProperties = new EndpointProperties();
+            endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+            Queue queue = session.createTemporaryQueue();
+            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
+            // Start listening first
+            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                    received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
+                }
+
+                @Override
+                public void onException(JCSMPException e) {
+
+                }
+            });
+            session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
+                    JCSMPSession.WAIT_FOR_CONFIRM);
+            receiver.start();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         // Produce messages
-        PersistentMessagePublisher publisher = messagingService.createPersistentMessagePublisherBuilder()
-                .build()
-                .start();
-        Topic tp = Topic.of(topic);
-        for (int i = 0; i < COUNT; i++) {
-            publisher.publish(String.valueOf(i + 1), tp);
+        XMLMessageProducer publisher = null;
+        Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
+        try {
+            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
+
+            for (int i = 0; i < COUNT; i++) {
+                sendTextMessage(Integer.toString(i + 1), publisher, tp);
+            }
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
 
         await()
@@ -202,7 +318,7 @@ public class EndToEndPerformanceTest extends WeldTestBase {
         @Outgoing("out")
         Multi<Message<String>> in(SolaceInboundMessage<byte[]> msg) {
             //            return messagingService.messageBuilder().build(payload);
-            return Multi.createFrom().items(msg.getMessage().getPayloadAsString())
+            return Multi.createFrom().items(SolaceMessageUtils.getPayloadAsString(msg.getMessage()))
                     .map(p -> Message.of(p).withAck(() -> {
                         msg.ack();
                         return CompletableFuture.completedFuture(null);
@@ -228,21 +344,51 @@ public class EndToEndPerformanceTest extends WeldTestBase {
 
         List<String> received = new CopyOnWriteArrayList<>();
 
-        // Start listening processed messages
-        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
-                .withMessageAutoAcknowledgement()
-                .withSubscriptions(TopicSubscription.of(processedTopic))
-                .build(Queue.nonDurableExclusiveQueue());
-        receiver.receiveAsync(inboundMessage -> received.add(inboundMessage.getPayloadAsString()));
-        receiver.start();
+        try {
+            EndpointProperties endpointProperties = new EndpointProperties();
+            endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+            Queue queue = session.createTemporaryQueue();
+            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
+            // Start listening first
+            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                    received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
+                }
+
+                @Override
+                public void onException(JCSMPException e) {
+
+                }
+            });
+            session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
+                    JCSMPSession.WAIT_FOR_CONFIRM);
+            receiver.start();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         // Produce messages
-        PersistentMessagePublisher publisher = messagingService.createPersistentMessagePublisherBuilder()
-                .build()
-                .start();
-        Topic tp = Topic.of(topic);
-        for (int i = 0; i < COUNT; i++) {
-            publisher.publish(String.valueOf(i + 1), tp);
+        XMLMessageProducer publisher = null;
+        Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
+        try {
+            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
+
+            for (int i = 0; i < COUNT; i++) {
+                sendTextMessage(Integer.toString(i + 1), publisher, tp);
+            }
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
 
         await()
@@ -268,21 +414,41 @@ public class EndToEndPerformanceTest extends WeldTestBase {
 
         List<String> received = new CopyOnWriteArrayList<>();
 
-        // Start listening processed messages
-        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
-                .withMessageAutoAcknowledgement()
-                .withSubscriptions(TopicSubscription.of(processedTopic))
-                .build(Queue.nonDurableExclusiveQueue());
-        receiver.receiveAsync(inboundMessage -> received.add(inboundMessage.getPayloadAsString()));
-        receiver.start();
+        try {
+            EndpointProperties endpointProperties = new EndpointProperties();
+            endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+            Queue queue = session.createTemporaryQueue();
+            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
+            // Start listening first
+            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                    received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
+                }
+
+                @Override
+                public void onException(JCSMPException e) {
+
+                }
+            });
+            session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
+                    JCSMPSession.WAIT_FOR_CONFIRM);
+            receiver.start();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         // Produce messages
-        PersistentMessagePublisher publisher = messagingService.createPersistentMessagePublisherBuilder()
-                .build()
-                .start();
-        Topic tp = Topic.of(topic);
-        for (int i = 0; i < COUNT; i++) {
-            publisher.publish(String.valueOf(i + 1), tp);
+        XMLMessageProducer publisher = null;
+        Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
+        try {
+            publisher = session.getMessageProducer(null);
+
+            for (int i = 0; i < COUNT; i++) {
+                sendTextMessage(Integer.toString(i + 1), publisher, tp);
+            }
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
 
         await()
@@ -309,20 +475,41 @@ public class EndToEndPerformanceTest extends WeldTestBase {
         List<String> received = new CopyOnWriteArrayList<>();
 
         // Start listening processed messages
-        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
-                .withMessageAutoAcknowledgement()
-                .withSubscriptions(TopicSubscription.of(processedTopic))
-                .build(Queue.nonDurableExclusiveQueue());
-        receiver.receiveAsync(inboundMessage -> received.add(inboundMessage.getPayloadAsString()));
-        receiver.start();
+        try {
+            EndpointProperties endpointProperties = new EndpointProperties();
+            endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+            Queue queue = session.createTemporaryQueue();
+            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
+            // Start listening first
+            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                    received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
+                }
+
+                @Override
+                public void onException(JCSMPException e) {
+
+                }
+            });
+            session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
+                    JCSMPSession.WAIT_FOR_CONFIRM);
+            receiver.start();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         // Produce messages
-        PersistentMessagePublisher publisher = messagingService.createPersistentMessagePublisherBuilder()
-                .build()
-                .start();
-        Topic tp = Topic.of(topic);
-        for (int i = 0; i < COUNT; i++) {
-            publisher.publish(String.valueOf(i + 1), tp);
+        XMLMessageProducer publisher = null;
+        Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
+        try {
+            publisher = session.getMessageProducer(null);
+
+            for (int i = 0; i < COUNT; i++) {
+                sendTextMessage(Integer.toString(i + 1), publisher, tp);
+            }
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
 
         await()
@@ -350,20 +537,41 @@ public class EndToEndPerformanceTest extends WeldTestBase {
         List<String> received = new CopyOnWriteArrayList<>();
 
         // Start listening processed messages
-        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
-                .withMessageAutoAcknowledgement()
-                .withSubscriptions(TopicSubscription.of(processedTopic))
-                .build(Queue.nonDurableExclusiveQueue());
-        receiver.receiveAsync(inboundMessage -> received.add(inboundMessage.getPayloadAsString()));
-        receiver.start();
+        try {
+            EndpointProperties endpointProperties = new EndpointProperties();
+            endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+            Queue queue = session.createTemporaryQueue();
+            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
+            // Start listening first
+            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+                @Override
+                public void onReceive(BytesXMLMessage bytesXMLMessage) {
+                    received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
+                }
+
+                @Override
+                public void onException(JCSMPException e) {
+
+                }
+            });
+            session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
+                    JCSMPSession.WAIT_FOR_CONFIRM);
+            receiver.start();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
 
         // Produce messages
-        PersistentMessagePublisher publisher = messagingService.createPersistentMessagePublisherBuilder()
-                .build()
-                .start();
-        Topic tp = Topic.of(topic);
-        for (int i = 0; i < COUNT; i++) {
-            publisher.publish(String.valueOf(i + 1), tp);
+        XMLMessageProducer publisher = null;
+        Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
+        try {
+            publisher = session.getMessageProducer(null);
+
+            for (int i = 0; i < COUNT; i++) {
+                sendTextMessage(Integer.toString(i + 1), publisher, tp);
+            }
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
 
         await()
@@ -377,10 +585,21 @@ public class EndToEndPerformanceTest extends WeldTestBase {
         @Outgoing("out")
         @Blocking(ordered = false)
         Message<String> in(SolaceInboundMessage<byte[]> msg) {
-            return Message.of(msg.getMessage().getPayloadAsString()).withAck(() -> {
+            return Message.of(SolaceMessageUtils.getPayloadAsString(msg.getMessage())).withAck(() -> {
                 msg.ack();
                 return CompletableFuture.completedFuture(null);
             });
+        }
+    }
+
+    private void sendTextMessage(String payload, XMLMessageProducer publisher, Topic tp) {
+        TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+        textMessage.setText(payload);
+        textMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+        try {
+            publisher.send(textMessage, tp);
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
         }
     }
 }

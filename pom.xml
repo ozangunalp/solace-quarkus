@@ -171,8 +171,8 @@
         <module>quarkus-solace-client</module>
         <module>quarkus-solace-messaging-connector</module>
         <module>docs</module>
-        <module>samples/hello-solace</module>
-        <module>samples/hello-connector-solace</module>
+<!--        <module>samples/hello-solace</module>-->
+<!--        <module>samples/hello-connector-solace</module>-->
         <module>integration-tests</module>
       </modules>
     </profile>

@@ -3,16 +3,13 @@ package com.solace.quarkus.messaging.fault;
 import java.time.Duration;
 import java.util.concurrent.CompletionStage;
 
+import org.eclipse.microprofile.reactive.messaging.Metadata;
+
+import com.solace.quarkus.messaging.i18n.SolaceLogging;
+import com.solace.quarkus.messaging.incoming.SolaceInboundMessage;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.XMLMessage;
-import org.eclipse.microprofile.reactive.messaging.Metadata;
-
-import com.solace.messaging.MessagingService;
-import com.solace.messaging.config.MessageAcknowledgementConfiguration;
-import com.solace.messaging.receiver.AcknowledgementSupport;
-import com.solace.quarkus.messaging.i18n.SolaceLogging;
-import com.solace.quarkus.messaging.incoming.SolaceInboundMessage;
 
 public class SolaceErrorTopic implements SolaceFailureHandler {
     private final String channel;
@@ -23,7 +20,8 @@ public class SolaceErrorTopic implements SolaceFailureHandler {
     private final boolean dmqEligible;
     private final Long timeToLive;
 
-    public SolaceErrorTopic(String channel, String errorTopic, boolean dmqEligible, Long timeToLive, long maxDeliveryAttempts, JCSMPSession solace) {
+    public SolaceErrorTopic(String channel, String errorTopic, boolean dmqEligible, Long timeToLive, long maxDeliveryAttempts,
+            JCSMPSession solace) {
         this.channel = channel;
         this.errorTopic = errorTopic;
         this.dmqEligible = dmqEligible;
