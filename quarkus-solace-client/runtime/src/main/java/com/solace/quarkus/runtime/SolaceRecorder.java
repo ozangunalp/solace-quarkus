@@ -3,6 +3,7 @@ package com.solace.quarkus.runtime;
 import java.util.Map;
 import java.util.function.Function;
 
+import io.quarkus.logging.Log;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.util.TypeLiteral;
 
@@ -15,6 +16,7 @@ import io.quarkus.runtime.annotations.Recorder;
 
 @Recorder
 public class SolaceRecorder {
+    private JCSMPSession service;
     private static final TypeLiteral<Instance<MessagingServiceClientCustomizer>> CUSTOMIZER = new TypeLiteral<>() {
     };
 
@@ -42,16 +44,15 @@ public class SolaceRecorder {
                     properties.setProperty(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2,
                             oidcProvider.getToken().getAccessToken());
                 }
-
-                JCSMPSession service;
+                
                 try {
                     if (reference.isUnsatisfied()) {
-                        service = JCSMPFactory.onlyInstance().createSession(properties, null);
+                        service = JCSMPFactory.onlyInstance().createSession(properties, null, sessionEventArgs -> SolaceRecorder.this.handleEvent(sessionEventArgs, oidcProvider, authScheme));
                     } else {
                         if (!reference.isResolvable()) {
                             throw new IllegalStateException("Multiple MessagingServiceClientCustomizer instances found");
                         } else {
-                            service = JCSMPFactory.onlyInstance().createSession(reference.get().customize(properties), null);
+                            service = JCSMPFactory.onlyInstance().createSession(reference.get().customize(properties), null, sessionEventArgs -> SolaceRecorder.this.handleEvent(sessionEventArgs, oidcProvider, authScheme));
                         }
                     }
 
@@ -66,6 +67,7 @@ public class SolaceRecorder {
                     });
 
                     service.connect();
+
                 } catch (JCSMPException e) {
                     throw new IllegalStateException(e);
                 }
@@ -74,17 +76,17 @@ public class SolaceRecorder {
         };
     }
 
-    //    private void handleEvent(SessionEventArgs sessionEventArgs, OidcProvider oidcProvider, String authScheme) {
-    //        if (sessionEventArgs.getEvent().equals(SessionEvent.RECONNECTING)) {
-    //            Log.info("Reconnecting to Solace broker due to " + sessionEventArgs.getInfo());
-    //            if (oidcProvider != null && authScheme != null && "AUTHENTICATION_SCHEME_OAUTH2".equals(authScheme)) {
-    //                try {
-    //                    service.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oidcProvider.getToken().getAccessToken());
-    //                } catch (JCSMPException e) {
-    //                    throw new RuntimeException(e);
-    //                }
-    //            }
-    //        }
-    //    }
+    private void handleEvent(SessionEventArgs sessionEventArgs, OidcProvider oidcProvider, String authScheme) {
+        if (sessionEventArgs.getEvent().equals(SessionEvent.RECONNECTING)) {
+            Log.info("Reconnecting to Solace broker due to " + sessionEventArgs.getInfo());
+            if (oidcProvider != null && authScheme != null && "AUTHENTICATION_SCHEME_OAUTH2".equals(authScheme)) {
+                try {
+                    service.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, oidcProvider.getToken().getAccessToken());
+                } catch (JCSMPException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+    }
 
 }

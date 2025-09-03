@@ -3,6 +3,7 @@ package com.solace.quarkus.messaging.locals;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
@@ -593,10 +594,10 @@ public class LocalPropagationTest extends WeldTestBase {
     }
 
     private void sendTextMessage(String payload, XMLMessageProducer publisher, Topic tp) {
-        TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-        textMessage.setText(payload);
+        BytesXMLMessage textMessage = JCSMPFactory.onlyInstance().createMessage(BytesXMLMessage.class);
+        textMessage.writeAttachment(payload.getBytes(StandardCharsets.UTF_8));
         textMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
-        textMessage.setHTTPContentEncoding(HttpHeaderValues.TEXT_PLAIN.toString());
+        //        textMessage.setHTTPContentEncoding(HttpHeaderValues.TEXT_PLAIN.toString());
         textMessage.setHTTPContentType(HttpHeaderValues.TEXT_PLAIN.toString());
         try {
             publisher.send(textMessage, tp);

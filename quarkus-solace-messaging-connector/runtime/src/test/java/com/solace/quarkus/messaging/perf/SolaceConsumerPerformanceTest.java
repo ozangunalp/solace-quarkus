@@ -42,7 +42,17 @@ public class SolaceConsumerPerformanceTest extends WeldTestBase {
         XMLMessageProducer publisher = null;
         Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
         try {
-            publisher = session.getMessageProducer(null);
+            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
 
             for (int i = 0; i < COUNT; i++) {
                 sendTextMessage(Integer.toString(i + 1), publisher, tp);

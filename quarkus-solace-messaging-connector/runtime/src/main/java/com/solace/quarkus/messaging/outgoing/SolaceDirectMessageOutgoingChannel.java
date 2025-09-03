@@ -13,6 +13,7 @@ import jakarta.enterprise.inject.Instance;
 
 import org.eclipse.microprofile.reactive.messaging.Message;
 
+import com.solace.quarkus.messaging.PublishReceipt;
 import com.solace.quarkus.messaging.SolaceConnectorOutgoingConfiguration;
 import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
 import com.solace.quarkus.messaging.i18n.SolaceLogging;
@@ -64,17 +65,7 @@ public class SolaceDirectMessageOutgoingChannel {
         this.gracefulShutdown = oc.getClientGracefulShutdown();
         this.gracefulShutdownWaitTimeout = oc.getClientGracefulShutdownWaitTimeout();
         try {
-            this.publisher = this.solace.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
-                @Override
-                public void responseReceivedEx(Object o) {
-
-                }
-
-                @Override
-                public void handleErrorEx(Object o, JCSMPException e, long l) {
-
-                }
-            });
+            this.publisher = this.solace.getMessageProducer(new PublishReceipt());
         } catch (JCSMPException e) {
             throw new RuntimeException(e);
         }
@@ -193,14 +184,14 @@ public class SolaceDirectMessageOutgoingChannel {
         }
 
         if (payload instanceof String) {
-            outboundMessage.setHTTPContentEncoding(HttpHeaderValues.TEXT_PLAIN.toString());
+            //            outboundMessage.setHTTPContentEncoding(HttpHeaderValues.TEXT_PLAIN.toString());
             outboundMessage.setHTTPContentType(HttpHeaderValues.TEXT_PLAIN.toString());
             outboundMessage.writeAttachment(((String) payload).getBytes(StandardCharsets.UTF_8));
         } else if (payload instanceof byte[]) {
             outboundMessage.writeAttachment((byte[]) payload);
-        } else {
+        } else if (!(payload instanceof BytesXMLMessage)) {
             outboundMessage.setHTTPContentType(HttpHeaderValues.APPLICATION_JSON.toString());
-            outboundMessage.setHTTPContentEncoding(HttpHeaderValues.APPLICATION_JSON.toString());
+            //            outboundMessage.setHTTPContentEncoding(HttpHeaderValues.APPLICATION_JSON.toString());
             outboundMessage.writeAttachment(Json.encode(payload).getBytes(StandardCharsets.UTF_8));
         }
 
@@ -212,14 +203,14 @@ public class SolaceDirectMessageOutgoingChannel {
                         .withTopic(topic.get().getName())
                         .withMessageID(outboundMessage.getApplicationMessageId())
                         .withCorrelationID(outboundMessage.getCorrelationId())
-                        .withPartitionKey(
-                                outboundMessage.getProperties()
-                                        .containsKey(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
-                                                ? outboundMessage.getProperties()
-                                                        .getString(
-                                                                XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
-                                                : null)
-                        .withPayloadSize(Long.valueOf(SolaceMessageUtils.getPayloadAsBytes(outboundMessage).length))
+                        .withPartitionKey(outboundMessage.getProperties() != null ? (outboundMessage.getProperties()
+                                .containsKey(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
+                                        ? outboundMessage.getProperties()
+                                                .getString(
+                                                        XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
+                                        : null)
+                                : null)
+                        .withPayloadSize((long) SolaceMessageUtils.getPayloadAsBytes(outboundMessage).length)
                         .withProperties(SolaceMessageUtils.getPropertiesMap(outboundMessage.getProperties())).build();
             } catch (SDTException e) {
                 throw new RuntimeException(e);
@@ -228,24 +219,22 @@ public class SolaceDirectMessageOutgoingChannel {
         }
 
         return Uni.createFrom().<Object> emitter(e -> {
-            boolean exitExceptionally = false;
             try {
                 if (isPublisherReady) {
                     publisher.send(outboundMessage, topic.get());
                     publishedMessagesTracker.decrement();
-                    e.complete(null);
+                    e.complete("SUCCESS");
+                    /**
+                     * @TODO - Direct messages will only receive exception callback. Hence need to find a way
+                     *       to identify error before calling success. Currently any exceptions when publishing direct messages
+                     *       is ignored.
+                     */
                 }
             } catch (Exception exception) {
                 isPublisherReady = false;
-                exitExceptionally = true;
                 e.fail(exception);
             } catch (Throwable t) {
                 e.fail(t);
-            } finally {
-                if (exitExceptionally) {
-                    // @TODO
-                    //                    publisher.notifyWhenReady();
-                }
             }
         }).invoke(() -> SolaceLogging.log.successfullyToTopic(channel, topic.get().getName()));
     }

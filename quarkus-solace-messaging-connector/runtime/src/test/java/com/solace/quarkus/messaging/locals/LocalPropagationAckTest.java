@@ -118,7 +118,7 @@ public class LocalPropagationAckTest extends WeldTestBase {
         TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
         textMessage.setText(payload);
         textMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
-        textMessage.setHTTPContentEncoding(HttpHeaderValues.TEXT_PLAIN.toString());
+        //        textMessage.setHTTPContentEncoding(HttpHeaderValues.TEXT_PLAIN.toString());
         textMessage.setHTTPContentType(HttpHeaderValues.TEXT_PLAIN.toString());
         try {
             publisher.send(textMessage, tp);

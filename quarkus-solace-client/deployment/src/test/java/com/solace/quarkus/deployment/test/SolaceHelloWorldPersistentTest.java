@@ -55,7 +55,7 @@ public class SolaceHelloWorldPersistentTest {
         await().until(() -> receiver.list().size() == 3);
 
         for (BytesXMLMessage message : receiver.list()) {
-            assertThat(new String(message.getBytes())).startsWith("Hello World");
+            assertThat(new String(message.getAttachmentByteBuffer().array(), StandardCharsets.UTF_8)).startsWith("Hello World");
         }
     }
 
@@ -64,27 +64,32 @@ public class SolaceHelloWorldPersistentTest {
 
         @Inject
         JCSMPSession session;
-        private XMLMessageConsumer receiver;
+        private FlowReceiver receiver;
         private final List<BytesXMLMessage> list = new CopyOnWriteArrayList<>();
 
         public void init(@Observes StartupEvent ev) {
             try {
+
                 EndpointProperties endpointProperties = new EndpointProperties();
                 endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
                 Queue queue = JCSMPFactory.onlyInstance().createQueue("my-queue");
+
+                ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
+                consumerFlowProperties.setEndpoint(queue);
+
                 session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
-                receiver = session.getMessageConsumer(new XMLMessageListener() {
+                receiver = session.createFlow(new XMLMessageListener() {
                     @Override
                     public void onReceive(BytesXMLMessage bytesXMLMessage) {
-                        bytesXMLMessage.ackMessage();
                         list.add(bytesXMLMessage);
+                        bytesXMLMessage.ackMessage();
                     }
 
                     @Override
                     public void onException(JCSMPException e) {
 
                     }
-                });
+                }, consumerFlowProperties, endpointProperties);
                 session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic("hello/persistent"),
                         JCSMPSession.WAIT_FOR_CONFIRM);
                 receiver.start();

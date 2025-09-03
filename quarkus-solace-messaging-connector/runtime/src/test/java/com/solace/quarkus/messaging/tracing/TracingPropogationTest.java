@@ -85,7 +85,17 @@ public class TracingPropogationTest extends WeldTestBase {
         // Produce messages
         XMLMessageProducer publisher = null;
         try {
-            publisher = session.getMessageProducer(null);
+            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
             Topic tp = JCSMPFactory.onlyInstance().createTopic("quarkus/integration/test/replay/messages");
             for (int i = 1; i <= 5; i++) {
                 sendTextMessage(Integer.toString(i), publisher, tp);
@@ -123,9 +133,10 @@ public class TracingPropogationTest extends WeldTestBase {
             EndpointProperties endpointProperties = new EndpointProperties();
             endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
             Queue queue = session.createTemporaryQueue();
-            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
             // Start listening first
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
+            consumerFlowProperties.setEndpoint(queue);
+            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
@@ -135,7 +146,7 @@ public class TracingPropogationTest extends WeldTestBase {
                 public void onException(JCSMPException e) {
 
                 }
-            });
+            }, consumerFlowProperties, endpointProperties);
             session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(topic), JCSMPSession.WAIT_FOR_CONFIRM);
             receiver.start();
         } catch (JCSMPException e) {
@@ -185,9 +196,10 @@ public class TracingPropogationTest extends WeldTestBase {
             EndpointProperties endpointProperties = new EndpointProperties();
             endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
             Queue queue = session.createTemporaryQueue();
-            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
             // Start listening first
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
+            consumerFlowProperties.setEndpoint(queue);
+            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
@@ -197,7 +209,7 @@ public class TracingPropogationTest extends WeldTestBase {
                 public void onException(JCSMPException e) {
 
                 }
-            });
+            }, consumerFlowProperties, endpointProperties);
             session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
                     JCSMPSession.WAIT_FOR_CONFIRM);
             receiver.start();
@@ -209,7 +221,17 @@ public class TracingPropogationTest extends WeldTestBase {
         // Produce messages
         XMLMessageProducer publisher = null;
         try {
-            publisher = session.getMessageProducer(null);
+            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
             Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
             for (int i = 1; i <= 5; i++) {
                 sendTextMessage(Integer.toString(i), publisher, tp);
@@ -295,6 +317,7 @@ public class TracingPropogationTest extends WeldTestBase {
     private void sendTextMessage(String payload, XMLMessageProducer publisher, Topic tp) {
         TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
         textMessage.setText(payload);
+        //        textMessage.setHTTPContentType(HttpHeaderValues.TEXT_PLAIN.toString());
         textMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
         try {
             publisher.send(textMessage, tp);

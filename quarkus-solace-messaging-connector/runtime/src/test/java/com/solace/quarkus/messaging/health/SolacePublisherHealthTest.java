@@ -35,9 +35,10 @@ public class SolacePublisherHealthTest extends WeldTestBase {
             EndpointProperties endpointProperties = new EndpointProperties();
             endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
             Queue queue = session.createTemporaryQueue();
-            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
 
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
+            consumerFlowProperties.setEndpoint(queue);
+            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
@@ -47,7 +48,7 @@ public class SolacePublisherHealthTest extends WeldTestBase {
                 public void onException(JCSMPException e) {
 
                 }
-            });
+            }, consumerFlowProperties, endpointProperties);
             session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(topic), JCSMPSession.WAIT_FOR_CONFIRM);
             receiver.start();
         } catch (JCSMPException e) {

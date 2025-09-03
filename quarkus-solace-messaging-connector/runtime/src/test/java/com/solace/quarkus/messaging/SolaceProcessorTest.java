@@ -13,7 +13,6 @@ import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.eclipse.microprofile.reactive.messaging.Outgoing;
 import org.junit.jupiter.api.Test;
 
-import com.solace.quarkus.messaging.base.SolaceContainer;
 import com.solace.quarkus.messaging.base.WeldTestBase;
 import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
 import com.solacesystems.jcsmp.*;
@@ -43,9 +42,10 @@ public class SolaceProcessorTest extends WeldTestBase {
             EndpointProperties endpointProperties = new EndpointProperties();
             endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
             Queue queue = session.createTemporaryQueue();
-            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
 
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
+            consumerFlowProperties.setEndpoint(queue);
+            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
@@ -55,7 +55,7 @@ public class SolaceProcessorTest extends WeldTestBase {
                 public void onException(JCSMPException e) {
 
                 }
-            });
+            }, consumerFlowProperties, endpointProperties);
             session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
                     JCSMPSession.WAIT_FOR_CONFIRM);
             receiver.start();
@@ -77,7 +77,7 @@ public class SolaceProcessorTest extends WeldTestBase {
 
                 }
             });
-            Topic tp = JCSMPFactory.onlyInstance().createTopic(SolaceContainer.INTEGRATION_TEST_QUEUE_SUBSCRIPTION);
+            Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
             for (int i = 1; i <= 5; i++) {
                 sendTextMessage(Integer.toString(i), publisher, tp);
             }

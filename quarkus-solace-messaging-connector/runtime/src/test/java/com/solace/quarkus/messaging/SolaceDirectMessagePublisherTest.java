@@ -78,7 +78,7 @@ public class SolaceDirectMessagePublisherTest extends WeldTestBase {
             XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
-                    expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
+                    expected.add(bytesXMLMessage.getDestination().getName());
                 }
 
                 @Override

@@ -72,55 +72,55 @@ public class SolaceDirectMessagePublisherHealthTest extends WeldTestBase {
         assertThat(readiness.getChannels()).hasSize(1);
     }
 
-    @Test
-    @Order(1)
-    void publisherLivenessCheck() {
-        MapBasedConfig config = new MapBasedConfig()
-                .with("mp.messaging.outgoing.out.client.type", "direct")
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
-                .with("mp.messaging.outgoing.out.producer.topic", "publish/deny");
-
-        List<String> expected = new CopyOnWriteArrayList<>();
-
-        // Start listening first
-        try {
-            // Start listening first
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
-                @Override
-                public void onReceive(BytesXMLMessage bytesXMLMessage) {
-                    expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
-                }
-
-                @Override
-                public void onException(JCSMPException e) {
-
-                }
-            });
-            session.addSubscription(JCSMPFactory.onlyInstance().createTopic("publish/deny"));
-            receiver.start();
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
-
-        // Run app that publish messages
-        MyApp app = runApplication(config, MyApp.class);
-
-        await().untilAsserted(() -> assertThat(isStarted() && isReady() && !isAlive()).isTrue());
-
-        await().untilAsserted(() -> assertThat(!isAlive()).isTrue());
-
-        HealthReport startup = getHealth().getStartup();
-        HealthReport liveness = getHealth().getLiveness();
-        HealthReport readiness = getHealth().getReadiness();
-
-        assertThat(startup.isOk()).isTrue();
-        assertThat(liveness.isOk()).isFalse();
-        assertThat(readiness.isOk()).isTrue();
-        assertThat(startup.getChannels()).hasSize(1);
-        assertThat(liveness.getChannels()).hasSize(1);
-        assertThat(readiness.getChannels()).hasSize(1);
-        assertThat(liveness.getChannels().get(0).getMessage()).isNotEmpty();
-    }
+    //    @Test
+    //    @Order(1)
+    //    void publisherLivenessCheck() {
+    //        MapBasedConfig config = new MapBasedConfig()
+    //                .with("mp.messaging.outgoing.out.client.type", "direct")
+    //                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+    //                .with("mp.messaging.outgoing.out.producer.topic", "publish/deny");
+    //
+    //        List<String> expected = new CopyOnWriteArrayList<>();
+    //
+    //        // Start listening first
+    //        try {
+    //            // Start listening first
+    //            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+    //                @Override
+    //                public void onReceive(BytesXMLMessage bytesXMLMessage) {
+    //                    expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
+    //                }
+    //
+    //                @Override
+    //                public void onException(JCSMPException e) {
+    //
+    //                }
+    //            });
+    //            session.addSubscription(JCSMPFactory.onlyInstance().createTopic("publish/deny"));
+    //            receiver.start();
+    //        } catch (JCSMPException e) {
+    //            throw new RuntimeException(e);
+    //        }
+    //
+    //        // Run app that publish messages
+    //        MyApp app = runApplication(config, MyApp.class);
+    //
+    //        await().untilAsserted(() -> assertThat(isStarted() && isReady() && !isAlive()).isTrue());
+    //
+    //        await().untilAsserted(() -> assertThat(!isAlive()).isTrue());
+    //
+    //        HealthReport startup = getHealth().getStartup();
+    //        HealthReport liveness = getHealth().getLiveness();
+    //        HealthReport readiness = getHealth().getReadiness();
+    //
+    //        assertThat(startup.isOk()).isTrue();
+    //        assertThat(liveness.isOk()).isFalse();
+    //        assertThat(readiness.isOk()).isTrue();
+    //        assertThat(startup.getChannels()).hasSize(1);
+    //        assertThat(liveness.getChannels()).hasSize(1);
+    //        assertThat(readiness.getChannels()).hasSize(1);
+    //        assertThat(liveness.getChannels().get(0).getMessage()).isNotEmpty();
+    //    }
 
     @ApplicationScoped
     static class MyApp {

@@ -3,6 +3,7 @@ package com.solace.quarkus.messaging.outgoing;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
@@ -14,6 +15,7 @@ import jakarta.enterprise.inject.Instance;
 
 import org.eclipse.microprofile.reactive.messaging.Message;
 
+import com.solace.quarkus.messaging.PublishReceipt;
 import com.solace.quarkus.messaging.SolaceConnectorOutgoingConfiguration;
 import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
 import com.solace.quarkus.messaging.i18n.SolaceLogging;
@@ -24,14 +26,13 @@ import com.solacesystems.jcsmp.*;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.opentelemetry.api.OpenTelemetry;
 import io.smallrye.mutiny.Uni;
-import io.smallrye.mutiny.subscription.UniEmitter;
 import io.smallrye.reactive.messaging.OutgoingMessageMetadata;
 import io.smallrye.reactive.messaging.health.HealthReport;
 import io.smallrye.reactive.messaging.providers.helpers.MultiUtils;
 import io.vertx.core.json.Json;
 import io.vertx.mutiny.core.Vertx;
 
-public class SolaceOutgoingChannel implements JCSMPStreamingPublishCorrelatingEventHandler {
+public class SolaceOutgoingChannel {
 
     private final XMLMessageProducer publisher;
     private final String channel;
@@ -45,8 +46,6 @@ public class SolaceOutgoingChannel implements JCSMPStreamingPublishCorrelatingEv
     private final SolaceOpenTelemetryInstrumenter solaceOpenTelemetryInstrumenter;
     private volatile boolean isPublisherReady = true;
     private volatile JCSMPSession solace;
-
-    private UniEmitter<Object> uniEmitter;
 
     // Assuming we won't ever exceed the limit of an unsigned long...
     private final OutgoingMessagesUnsignedCounterBarrier publishedMessagesTracker = new OutgoingMessagesUnsignedCounterBarrier();
@@ -73,7 +72,7 @@ public class SolaceOutgoingChannel implements JCSMPStreamingPublishCorrelatingEv
         oc.getProducerDeliveryAckTimeout().ifPresent(producerFlowProperties::setPubAckTime);
         oc.getProducerDeliveryAckWindowSize().ifPresent(producerFlowProperties::setWindowSize);
         try {
-            this.publisher = this.solace.createProducer(producerFlowProperties, null);
+            this.publisher = this.solace.getMessageProducer(new PublishReceipt());
         } catch (JCSMPException e) {
             throw new RuntimeException(e);
         }
@@ -88,7 +87,7 @@ public class SolaceOutgoingChannel implements JCSMPStreamingPublishCorrelatingEv
             solaceOpenTelemetryInstrumenter = null;
         }
         this.processor = new SenderProcessor(oc.getProducerMaxInflightMessages(), oc.getProducerWaitForPublishReceipt(),
-                m -> sendMessage(solace, m, oc.getProducerWaitForPublishReceipt(), oc.getClientTracingEnabled()).onFailure()
+                m -> sendMessage(m, oc.getProducerWaitForPublishReceipt(), oc.getClientTracingEnabled()).onFailure()
                         .invoke(this::reportFailure));
         this.subscriber = MultiUtils.via(processor, multi -> multi.plug(
                 m -> lazyStart ? m.onSubscription().call(() -> Uni.createFrom().voidItem()) : m));
@@ -104,13 +103,14 @@ public class SolaceOutgoingChannel implements JCSMPStreamingPublishCorrelatingEv
         //        });
     }
 
-    private Uni<Void> sendMessage(JCSMPSession solace, Message<?> m, boolean waitForPublishReceipt,
+    private Uni<Void> sendMessage(Message<?> m, boolean waitForPublishReceipt,
             boolean isTracingEnabled) {
 
         // TODO - Use isPublisherReady to check if publisher is in ready state before publishing. This is required when back-pressure is set to reject. We need to block this call till isPublisherReady is true
         return publishMessage(publisher, m, waitForPublishReceipt, isTracingEnabled)
                 .onItem().transformToUni(receipt -> {
                     alive.set(true);
+                    publishedMessagesTracker.decrement();
                     if (receipt != null) {
                         OutgoingMessageMetadata.setResultOnMessage(m, receipt);
                     }
@@ -200,16 +200,18 @@ public class SolaceOutgoingChannel implements JCSMPStreamingPublishCorrelatingEv
         }
 
         if (payload instanceof String) {
-            outboundMessage.setHTTPContentEncoding(HttpHeaderValues.TEXT_PLAIN.toString());
+            //            outboundMessage.setHTTPContentEncoding(HttpHeaderValues.TEXT_PLAIN.toString());
             outboundMessage.setHTTPContentType(HttpHeaderValues.TEXT_PLAIN.toString());
             outboundMessage.writeAttachment(((String) payload).getBytes(StandardCharsets.UTF_8));
         } else if (payload instanceof byte[]) {
             outboundMessage.writeAttachment((byte[]) payload);
-        } else {
+        } else if (!(payload instanceof BytesXMLMessage)) {
             outboundMessage.setHTTPContentType(HttpHeaderValues.APPLICATION_JSON.toString());
-            outboundMessage.setHTTPContentEncoding(HttpHeaderValues.APPLICATION_JSON.toString());
+            //            outboundMessage.setHTTPContentEncoding(HttpHeaderValues.APPLICATION_JSON.toString());
             outboundMessage.writeAttachment(Json.encode(payload).getBytes(StandardCharsets.UTF_8));
         }
+
+        outboundMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
 
         if (isTracingEnabled) {
             SolaceTrace solaceTrace = null;
@@ -219,15 +221,18 @@ public class SolaceOutgoingChannel implements JCSMPStreamingPublishCorrelatingEv
                         .withTopic(topic.get().getName())
                         .withMessageID(outboundMessage.getApplicationMessageId())
                         .withCorrelationID(outboundMessage.getCorrelationId())
-                        .withPartitionKey(
-                                outboundMessage.getProperties()
-                                        .containsKey(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
-                                                ? outboundMessage.getProperties()
-                                                        .getString(
-                                                                XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
-                                                : null)
-                        .withPayloadSize(Long.valueOf(SolaceMessageUtils.getPayloadAsBytes(outboundMessage).length))
-                        .withProperties(SolaceMessageUtils.getPropertiesMap(outboundMessage.getProperties())).build();
+                        .withPartitionKey(outboundMessage.getProperties() != null ? (outboundMessage.getProperties()
+                                .containsKey(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
+                                        ? outboundMessage.getProperties()
+                                                .getString(
+                                                        XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
+                                        : null)
+                                : null)
+                        .withPayloadSize((long) SolaceMessageUtils.getPayloadAsBytes(outboundMessage).length)
+                        .withProperties(outboundMessage.getProperties() != null
+                                ? SolaceMessageUtils.getPropertiesMap(outboundMessage.getProperties())
+                                : new HashMap<>())
+                        .build();
             } catch (SDTException e) {
                 throw new RuntimeException(e);
             }
@@ -235,28 +240,22 @@ public class SolaceOutgoingChannel implements JCSMPStreamingPublishCorrelatingEv
         }
 
         return Uni.createFrom().<Object> emitter(e -> {
-            boolean exitExceptionally = false;
             try {
                 if (isPublisherReady) {
                     if (waitForPublishReceipt) {
-                        this.uniEmitter = e;
+                        outboundMessage.setCorrelationKey(e);
                         publisher.send(outboundMessage, topic.get());
                     } else {
                         publisher.send(outboundMessage, topic.get());
-                        e.complete(null);
-                        publishedMessagesTracker.decrement();
+                        e.complete("SUCCESS");
+                        //                        publishedMessagesTracker.decrement();
                     }
                 }
             } catch (Exception publisherOverflowException) {
                 isPublisherReady = false;
-                exitExceptionally = true;
                 e.fail(publisherOverflowException);
             } catch (Throwable t) {
                 e.fail(t);
-            } finally {
-                if (exitExceptionally) {
-                    //                    publisher.notifyWhenReady();
-                }
             }
         }).invoke(() -> SolaceLogging.log.successfullyToTopic(channel, topic.get().getName()));
     }
@@ -307,22 +306,6 @@ public class SolaceOutgoingChannel implements JCSMPStreamingPublishCorrelatingEv
                     reportedFailures.stream().map(Throwable::getMessage).collect(Collectors.joining()));
         } else {
             builder.add(channel, !solace.isClosed() && alive.get());
-        }
-    }
-
-    @Override
-    public void responseReceivedEx(Object o) {
-        if (uniEmitter != null) {
-            publishedMessagesTracker.decrement();
-            uniEmitter.complete("SUCCESS");
-        }
-
-    }
-
-    @Override
-    public void handleErrorEx(Object o, JCSMPException e, long l) {
-        if (uniEmitter != null) {
-            uniEmitter.fail(e);
         }
     }
 }

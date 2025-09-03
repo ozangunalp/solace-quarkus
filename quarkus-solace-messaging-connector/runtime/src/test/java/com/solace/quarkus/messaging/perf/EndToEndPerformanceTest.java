@@ -51,9 +51,10 @@ public class EndToEndPerformanceTest extends WeldTestBase {
             EndpointProperties endpointProperties = new EndpointProperties();
             endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
             Queue queue = session.createTemporaryQueue();
-            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
             // Start listening first
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
+            consumerFlowProperties.setEndpoint(queue);
+            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
@@ -63,7 +64,7 @@ public class EndToEndPerformanceTest extends WeldTestBase {
                 public void onException(JCSMPException e) {
 
                 }
-            });
+            }, consumerFlowProperties, endpointProperties);
             session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
                     JCSMPSession.WAIT_FOR_CONFIRM);
             receiver.start();
@@ -121,9 +122,10 @@ public class EndToEndPerformanceTest extends WeldTestBase {
             EndpointProperties endpointProperties = new EndpointProperties();
             endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
             Queue queue = session.createTemporaryQueue();
-            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
             // Start listening first
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
+            consumerFlowProperties.setEndpoint(queue);
+            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
@@ -133,7 +135,7 @@ public class EndToEndPerformanceTest extends WeldTestBase {
                 public void onException(JCSMPException e) {
 
                 }
-            });
+            }, consumerFlowProperties, endpointProperties);
             session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
                     JCSMPSession.WAIT_FOR_CONFIRM);
             receiver.start();
@@ -192,9 +194,10 @@ public class EndToEndPerformanceTest extends WeldTestBase {
             EndpointProperties endpointProperties = new EndpointProperties();
             endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
             Queue queue = session.createTemporaryQueue();
-            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
             // Start listening first
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
+            consumerFlowProperties.setEndpoint(queue);
+            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
@@ -204,7 +207,7 @@ public class EndToEndPerformanceTest extends WeldTestBase {
                 public void onException(JCSMPException e) {
 
                 }
-            });
+            }, consumerFlowProperties, endpointProperties);
             session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
                     JCSMPSession.WAIT_FOR_CONFIRM);
             receiver.start();
@@ -264,9 +267,10 @@ public class EndToEndPerformanceTest extends WeldTestBase {
             EndpointProperties endpointProperties = new EndpointProperties();
             endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
             Queue queue = session.createTemporaryQueue();
-            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
             // Start listening first
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
+            consumerFlowProperties.setEndpoint(queue);
+            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
@@ -276,7 +280,7 @@ public class EndToEndPerformanceTest extends WeldTestBase {
                 public void onException(JCSMPException e) {
 
                 }
-            });
+            }, consumerFlowProperties, endpointProperties);
             session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
                     JCSMPSession.WAIT_FOR_CONFIRM);
             receiver.start();
@@ -348,9 +352,10 @@ public class EndToEndPerformanceTest extends WeldTestBase {
             EndpointProperties endpointProperties = new EndpointProperties();
             endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
             Queue queue = session.createTemporaryQueue();
-            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
             // Start listening first
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
+            consumerFlowProperties.setEndpoint(queue);
+            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
@@ -360,7 +365,7 @@ public class EndToEndPerformanceTest extends WeldTestBase {
                 public void onException(JCSMPException e) {
 
                 }
-            });
+            }, consumerFlowProperties, endpointProperties);
             session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
                     JCSMPSession.WAIT_FOR_CONFIRM);
             receiver.start();
@@ -418,9 +423,10 @@ public class EndToEndPerformanceTest extends WeldTestBase {
             EndpointProperties endpointProperties = new EndpointProperties();
             endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
             Queue queue = session.createTemporaryQueue();
-            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
             // Start listening first
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
+            consumerFlowProperties.setEndpoint(queue);
+            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
@@ -430,7 +436,7 @@ public class EndToEndPerformanceTest extends WeldTestBase {
                 public void onException(JCSMPException e) {
 
                 }
-            });
+            }, consumerFlowProperties, endpointProperties);
             session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
                     JCSMPSession.WAIT_FOR_CONFIRM);
             receiver.start();
@@ -442,7 +448,17 @@ public class EndToEndPerformanceTest extends WeldTestBase {
         XMLMessageProducer publisher = null;
         Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
         try {
-            publisher = session.getMessageProducer(null);
+            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
 
             for (int i = 0; i < COUNT; i++) {
                 sendTextMessage(Integer.toString(i + 1), publisher, tp);
@@ -479,9 +495,10 @@ public class EndToEndPerformanceTest extends WeldTestBase {
             EndpointProperties endpointProperties = new EndpointProperties();
             endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
             Queue queue = session.createTemporaryQueue();
-            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
             // Start listening first
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
+            consumerFlowProperties.setEndpoint(queue);
+            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
@@ -491,7 +508,7 @@ public class EndToEndPerformanceTest extends WeldTestBase {
                 public void onException(JCSMPException e) {
 
                 }
-            });
+            }, consumerFlowProperties, endpointProperties);
             session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
                     JCSMPSession.WAIT_FOR_CONFIRM);
             receiver.start();
@@ -503,7 +520,17 @@ public class EndToEndPerformanceTest extends WeldTestBase {
         XMLMessageProducer publisher = null;
         Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
         try {
-            publisher = session.getMessageProducer(null);
+            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
 
             for (int i = 0; i < COUNT; i++) {
                 sendTextMessage(Integer.toString(i + 1), publisher, tp);
@@ -541,9 +568,10 @@ public class EndToEndPerformanceTest extends WeldTestBase {
             EndpointProperties endpointProperties = new EndpointProperties();
             endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
             Queue queue = session.createTemporaryQueue();
-            session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
             // Start listening first
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
+            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
+            consumerFlowProperties.setEndpoint(queue);
+            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
                 @Override
                 public void onReceive(BytesXMLMessage bytesXMLMessage) {
                     received.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
@@ -553,7 +581,7 @@ public class EndToEndPerformanceTest extends WeldTestBase {
                 public void onException(JCSMPException e) {
 
                 }
-            });
+            }, consumerFlowProperties, endpointProperties);
             session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(processedTopic),
                     JCSMPSession.WAIT_FOR_CONFIRM);
             receiver.start();
@@ -565,7 +593,17 @@ public class EndToEndPerformanceTest extends WeldTestBase {
         XMLMessageProducer publisher = null;
         Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
         try {
-            publisher = session.getMessageProducer(null);
+            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
+                @Override
+                public void responseReceivedEx(Object o) {
+
+                }
+
+                @Override
+                public void handleErrorEx(Object o, JCSMPException e, long l) {
+
+                }
+            });
 
             for (int i = 0; i < COUNT; i++) {
                 sendTextMessage(Integer.toString(i + 1), publisher, tp);

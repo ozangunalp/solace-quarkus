@@ -110,8 +110,8 @@ public class SolaceOAuthTest {
                 solaceContainer.getOrigin(SolaceContainer.Service.SMF_SSL));
         properties.setProperty(JCSMPProperties.VPN_NAME, solaceContainer.getVpn());
         properties.setProperty(JCSMPProperties.AUTHENTICATION_SCHEME, "AUTHENTICATION_SCHEME_OAUTH2");
-        properties.setProperty(JCSMPProperties.SSL_VALIDATE_CERTIFICATE, "false");
-        properties.setProperty(JCSMPProperties.SSL_VALIDATE_CERTIFICATE_HOST, "false");
+        properties.setProperty(JCSMPProperties.SSL_VALIDATE_CERTIFICATE, false);
+        properties.setProperty(JCSMPProperties.SSL_VALIDATE_CERTIFICATE_HOST, false);
         properties.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, getAccessToken());
 
         JCSMPSession session = null;

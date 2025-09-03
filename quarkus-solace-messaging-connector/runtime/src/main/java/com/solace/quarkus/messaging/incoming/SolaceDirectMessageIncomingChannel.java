@@ -143,7 +143,7 @@ public class SolaceDirectMessageIncomingChannel {
                     .onFailure().retry().withBackOff(Duration.ofSeconds(1)).atMost(3).onFailure().invoke(this::reportFailure);
 
             if (!lazyStart) {
-                startReceiver(receiver);
+                startReceiver(receiver).await().indefinitely();
             }
         } catch (JCSMPException e) {
             throw new RuntimeException(e);

@@ -53,7 +53,7 @@ public class SolaceConsumerTest extends WeldTestBase {
         MyConsumer app = runApplication(config, MyConsumer.class);
 
         // Produce messages
-        XMLMessageProducer publisher = null;
+        XMLMessageProducer publisher;
         try {
             publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
                 @Override
@@ -330,7 +330,7 @@ public class SolaceConsumerTest extends WeldTestBase {
         MyErrorQueueConsumer app = runApplication(config, MyErrorQueueConsumer.class);
 
         // Produce messages
-        XMLMessageProducer publisher = null;
+        XMLMessageProducer publisher;
         try {
             publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
                 @Override
