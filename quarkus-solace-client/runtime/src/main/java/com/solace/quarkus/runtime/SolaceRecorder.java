@@ -3,7 +3,6 @@ package com.solace.quarkus.runtime;
 import java.util.Map;
 import java.util.function.Function;
 
-import io.quarkus.logging.Log;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.util.TypeLiteral;
 
@@ -11,6 +10,7 @@ import com.solace.quarkus.MessagingServiceClientCustomizer;
 import com.solacesystems.jcsmp.*;
 
 import io.quarkus.arc.SyntheticCreationalContext;
+import io.quarkus.logging.Log;
 import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 
@@ -44,15 +44,19 @@ public class SolaceRecorder {
                     properties.setProperty(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2,
                             oidcProvider.getToken().getAccessToken());
                 }
-                
+
                 try {
                     if (reference.isUnsatisfied()) {
-                        service = JCSMPFactory.onlyInstance().createSession(properties, null, sessionEventArgs -> SolaceRecorder.this.handleEvent(sessionEventArgs, oidcProvider, authScheme));
+                        service = JCSMPFactory.onlyInstance().createSession(properties, null,
+                                sessionEventArgs -> SolaceRecorder.this.handleEvent(sessionEventArgs, oidcProvider,
+                                        authScheme));
                     } else {
                         if (!reference.isResolvable()) {
                             throw new IllegalStateException("Multiple MessagingServiceClientCustomizer instances found");
                         } else {
-                            service = JCSMPFactory.onlyInstance().createSession(reference.get().customize(properties), null, sessionEventArgs -> SolaceRecorder.this.handleEvent(sessionEventArgs, oidcProvider, authScheme));
+                            service = JCSMPFactory.onlyInstance().createSession(reference.get().customize(properties), null,
+                                    sessionEventArgs -> SolaceRecorder.this.handleEvent(sessionEventArgs, oidcProvider,
+                                            authScheme));
                         }
                     }
 
