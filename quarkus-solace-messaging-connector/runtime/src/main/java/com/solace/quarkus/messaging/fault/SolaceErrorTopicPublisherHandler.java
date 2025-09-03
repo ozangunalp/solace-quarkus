@@ -9,20 +9,15 @@ import io.smallrye.mutiny.subscription.UniEmitter;
 
 import java.util.concurrent.CountDownLatch;
 
-class SolaceErrorTopicPublisherHandler implements JCSMPStreamingPublishCorrelatingEventHandler{
+class SolaceErrorTopicPublisherHandler {
 
     private final JCSMPSession solace;
     private final XMLMessageProducer publisher;
     private final OutboundErrorMessageMapper outboundErrorMessageMapper;
-    private UniEmitter<Object> uniEmitter;
-
-    CountDownLatch latch = new CountDownLatch(1);
-
     public SolaceErrorTopicPublisherHandler(JCSMPSession solace) {
         this.solace = solace;
-
         try {
-            publisher = solace.getMessageProducer(this);
+            publisher = solace.getMessageProducer(new PublisherEventHandler());
         } catch (JCSMPException e) {
             throw new RuntimeException(e);
         }
@@ -38,8 +33,8 @@ class SolaceErrorTopicPublisherHandler implements JCSMPStreamingPublishCorrelati
         //        }
         return Uni.createFrom().<Object> emitter(e -> {
             try {
-                this.uniEmitter = e;
                 // always wait for error message publish receipt to ensure it is successfully spooled on broker.
+                outboundMessage.setCorrelationKey("test");
                 publisher.send(outboundMessage, JCSMPFactory.onlyInstance().createTopic(errorTopic));
             } catch (Throwable t) {
                 e.fail(t);
@@ -47,13 +42,19 @@ class SolaceErrorTopicPublisherHandler implements JCSMPStreamingPublishCorrelati
         }).onFailure().invoke(t -> SolaceLogging.log.publishException(errorTopic, t));
     }
 
-    @Override
-    public void responseReceivedEx(Object o) {
-        uniEmitter.complete("SUCCESS");
-    }
+    static class PublisherEventHandler implements JCSMPStreamingPublishCorrelatingEventHandler {
+        @Override
+        public void responseReceivedEx(Object o) {
+            if (o instanceof UniEmitter) {
+                ((UniEmitter<?>) o).complete(null);
+            }
+        }
 
-    @Override
-    public void handleErrorEx(Object o, JCSMPException e, long l) {
-        uniEmitter.fail(e);
+        @Override
+        public void handleErrorEx(Object o, JCSMPException e, long l) {
+            if (o instanceof UniEmitter) {
+                ((UniEmitter<?>) o).fail(e);
+            }
+        }
     }
 }

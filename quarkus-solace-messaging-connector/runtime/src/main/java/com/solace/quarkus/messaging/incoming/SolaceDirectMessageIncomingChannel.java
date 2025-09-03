@@ -59,11 +59,6 @@ public class SolaceDirectMessageIncomingChannel {
         this.context = Context.newInstance(((VertxInternal) vertx.getDelegate()).createEventLoopContext());
         this.gracefulShutdown = ic.getClientGracefulShutdown();
         this.gracefulShutdownWaitTimeout = ic.getClientGracefulShutdownWaitTimeout();
-        XMLMessage.Outcome[] outcomes = new XMLMessage.Outcome[] { XMLMessage.Outcome.ACCEPTED };
-        if (ic.getConsumerQueueSupportsNacks()) {
-            outcomes = new XMLMessage.Outcome[] { XMLMessage.Outcome.ACCEPTED, XMLMessage.Outcome.FAILED,
-                    XMLMessage.Outcome.REJECTED };
-        }
         try {
             receiver = solace.getMessageConsumer((XMLMessageListener) null);
             String subscriptions = ic.getConsumerSubscriptions().orElse(this.channel);
@@ -79,18 +74,6 @@ public class SolaceDirectMessageIncomingChannel {
             // Wait for all subscriptions to complete
             Uni.join().all(subscriptionUnis).andCollectFailures()
                     .await().indefinitely();
-
-            //        switch (ic.getClientTypeDirectBackPressureStrategy()) {
-            //            case "oldest":
-            //                receiver.onBackPressureDropLatest(ic.getClientTypeDirectBackPressureBufferCapacity());
-            //                break;
-            //            case "latest":
-            //                builder.onBackPressureDropOldest(ic.getClientTypeDirectBackPressureBufferCapacity());
-            //                break;
-            //            default:
-            //                builder.onBackPressureElastic();
-            //                break;
-            //        }
 
             boolean lazyStart = ic.getClientLazyStart();
             this.ackHandler = null;
@@ -122,8 +105,8 @@ public class SolaceDirectMessageIncomingChannel {
                     messageProperties.put("messaging.solace.replication_group_message_id",
                             consumedMessage.getReplicationGroupMessageId().toString());
                     messageProperties.put("messaging.solace.priority", Integer.toString(consumedMessage.getPriority()));
-                    if (consumedMessage.getProperties().size() > 0) {
-                        messageProperties.putAll(new SolaceMessageUtils().getPropertiesMap(consumedMessage.getProperties()));
+                    if (!consumedMessage.getProperties().isEmpty()) {
+                        messageProperties.putAll(SolaceMessageUtils.getPropertiesMap(consumedMessage.getProperties()));
                     }
                     SolaceTrace solaceTrace = null;
                     try {
@@ -141,7 +124,7 @@ public class SolaceDirectMessageIncomingChannel {
                                                                         XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
                                                         : null)
                                 .withPayloadSize(
-                                        Long.valueOf(new SolaceMessageUtils().getPayloadAsBytes(consumedMessage).length))
+                                        (long) SolaceMessageUtils.getPayloadAsBytes(consumedMessage).length)
                                 .withProperties(messageProperties)
                                 .build();
                     } catch (SDTException e) {
@@ -155,34 +138,27 @@ public class SolaceDirectMessageIncomingChannel {
 
             this.stream = incomingMulti.plug(m -> lazyStart
                     ? m.onSubscription()
-                            .call(() -> {
-                                try {
-                                    receiver.start();
-                                    return Uni.createFrom().voidItem();
-                                } catch (JCSMPException e) {
-                                    throw new RuntimeException(e);
-                                }
-                            })
+                            .call(() -> startReceiver(receiver))
                     : m)
                     .onItem().invoke(() -> alive.set(true))
                     .onFailure().retry().withBackOff(Duration.ofSeconds(1)).atMost(3).onFailure().invoke(this::reportFailure);
 
             if (!lazyStart) {
-                this.receiver.startSync();
+                startReceiver(receiver);
             }
         } catch (JCSMPException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private static Uni<Void> subscribeToTopic(JCSMPSession session, String subscription) {
+    private Uni<Void> subscribeToTopic(JCSMPSession session, String subscription) {
         return Uni.createFrom().item(Unchecked.supplier(() -> {
             try {
                 Topic topic = JCSMPFactory.onlyInstance().createTopic(subscription);
                 session.addSubscription(topic);
                 return null;
             } catch (JCSMPException e) {
-                SolaceLogging.log.warn(e);
+                SolaceLogging.log.errorf("Failed to subscribe to topic %s on channel %s", subscription, channel, e);
                 return null;
             }
         }));
@@ -195,6 +171,18 @@ public class SolaceDirectMessageIncomingChannel {
             failures.remove(0);
         }
         failures.add(throwable);
+    }
+
+    private Uni<Void> startReceiver(XMLMessageConsumer receiver) {
+        return Uni.createFrom().item(Unchecked.supplier(() -> {
+            try {
+                receiver.start();
+                return Uni.createFrom().voidItem();
+            } catch (JCSMPException e) {
+                SolaceLogging.log.errorf(e, "Failed to start Solace consumer for channel %s", channel);
+                throw new RuntimeException(e);
+            }
+        })).replaceWithVoid();
     }
 
     private SolaceFailureHandler createFailureHandler(SolaceConnectorIncomingConfiguration ic, JCSMPSession solace) {
