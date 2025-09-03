@@ -11,8 +11,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
-import com.solacesystems.jcsmp.Queue;
-import io.smallrye.mutiny.unchecked.Unchecked;
 import jakarta.enterprise.inject.Instance;
 
 import org.eclipse.microprofile.reactive.messaging.Message;
@@ -28,6 +26,7 @@ import com.solacesystems.jcsmp.*;
 import io.opentelemetry.api.OpenTelemetry;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.unchecked.Unchecked;
 import io.smallrye.reactive.messaging.health.HealthReport;
 import io.vertx.core.impl.VertxInternal;
 import io.vertx.mutiny.core.Context;

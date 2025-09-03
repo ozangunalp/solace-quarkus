@@ -12,7 +12,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
-import io.smallrye.mutiny.unchecked.Unchecked;
 import jakarta.enterprise.inject.Instance;
 
 import org.eclipse.microprofile.reactive.messaging.Message;
@@ -29,6 +28,7 @@ import com.solacesystems.jcsmp.Queue;
 import io.opentelemetry.api.OpenTelemetry;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.unchecked.Unchecked;
 import io.smallrye.reactive.messaging.health.HealthReport;
 import io.vertx.core.impl.VertxInternal;
 import io.vertx.mutiny.core.Context;
@@ -125,73 +125,77 @@ public class SolaceIncomingChannel {
         this.pollerThread = Executors.newSingleThreadExecutor();
 
         createReceiver(solace, flow_prop, endpointProperties)
-        .invoke(receiver -> {
-            Multi<? extends Message<?>> incomingMulti = Multi.createBy().repeating()
-                    .uni(() -> Uni.createFrom().item(() -> {
+                .invoke(receiver -> {
+                    Multi<? extends Message<?>> incomingMulti = Multi.createBy().repeating()
+                            .uni(() -> Uni.createFrom().item(() -> {
                                 try {
                                     return receiver.receive();
                                 } catch (JCSMPException e) {
                                     throw new RuntimeException(e);
                                 }
                             })
-                            .runSubscriptionOn(pollerThread))
-                    .until(__ -> closed.get())
-                    .emitOn(context::runOnContext)
-                    .map(consumed -> new SolaceInboundMessage<>(consumed, ackHandler, failureHandler,
-                            unacknowledgedMessageTracker, this::reportFailure));
+                                    .runSubscriptionOn(pollerThread))
+                            .until(__ -> closed.get())
+                            .emitOn(context::runOnContext)
+                            .map(consumed -> new SolaceInboundMessage<>(consumed, ackHandler, failureHandler,
+                                    unacknowledgedMessageTracker, this::reportFailure));
 
-            if (ic.getClientTracingEnabled()) {
-                solaceOpenTelemetryInstrumenter = SolaceOpenTelemetryInstrumenter.createForIncoming(openTelemetryInstance);
-                incomingMulti = incomingMulti.map(message -> {
-                    BytesXMLMessage consumedMessage = message.getMetadata(SolaceInboundMetadata.class).get().getMessage();
-                    Map<String, String> messageProperties = new HashMap<>();
+                    if (ic.getClientTracingEnabled()) {
+                        solaceOpenTelemetryInstrumenter = SolaceOpenTelemetryInstrumenter
+                                .createForIncoming(openTelemetryInstance);
+                        incomingMulti = incomingMulti.map(message -> {
+                            BytesXMLMessage consumedMessage = message.getMetadata(SolaceInboundMetadata.class).get()
+                                    .getMessage();
+                            Map<String, String> messageProperties = new HashMap<>();
 
-                    messageProperties.put("messaging.solace.replication_group_message_id",
-                            consumedMessage.getReplicationGroupMessageId().toString());
-                    messageProperties.put("messaging.solace.priority", Integer.toString(consumedMessage.getPriority()));
-                    if (!consumedMessage.getProperties().isEmpty()) {
-                        messageProperties.putAll(SolaceMessageUtils.getPropertiesMap(consumedMessage.getProperties()));
+                            messageProperties.put("messaging.solace.replication_group_message_id",
+                                    consumedMessage.getReplicationGroupMessageId().toString());
+                            messageProperties.put("messaging.solace.priority", Integer.toString(consumedMessage.getPriority()));
+                            if (!consumedMessage.getProperties().isEmpty()) {
+                                messageProperties.putAll(SolaceMessageUtils.getPropertiesMap(consumedMessage.getProperties()));
+                            }
+
+                            SolaceTrace solaceTrace = null;
+                            try {
+                                solaceTrace = new SolaceTrace.Builder()
+                                        .withDestinationKind("queue")
+                                        .withTopic(consumedMessage.getDestination().getName())
+                                        .withMessageID(consumedMessage.getApplicationMessageId())
+                                        .withCorrelationID(consumedMessage.getCorrelationId())
+                                        .withPartitionKey(
+                                                consumedMessage.getProperties()
+                                                        .containsKey(
+                                                                XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
+                                                                        ? consumedMessage.getProperties()
+                                                                                .getString(
+                                                                                        XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
+                                                                        : null)
+                                        .withPayloadSize((long) SolaceMessageUtils.getPayloadAsBytes(consumedMessage).length)
+                                        .withProperties(messageProperties)
+                                        .build();
+                            } catch (SDTException e) {
+                                throw new RuntimeException(e);
+                            }
+
+                            return solaceOpenTelemetryInstrumenter.traceIncoming(message, solaceTrace, true);
+                        });
+                    } else {
+                        solaceOpenTelemetryInstrumenter = null;
                     }
 
-                    SolaceTrace solaceTrace = null;
-                    try {
-                        solaceTrace = new SolaceTrace.Builder()
-                                .withDestinationKind("queue")
-                                .withTopic(consumedMessage.getDestination().getName())
-                                .withMessageID(consumedMessage.getApplicationMessageId())
-                                .withCorrelationID(consumedMessage.getCorrelationId())
-                                .withPartitionKey(
-                                        consumedMessage.getProperties()
-                                                .containsKey(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
-                                                ? consumedMessage.getProperties()
-                                                .getString(
-                                                        XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
-                                                : null)
-                                .withPayloadSize((long) SolaceMessageUtils.getPayloadAsBytes(consumedMessage).length)
-                                .withProperties(messageProperties)
-                                .build();
-                    } catch (SDTException e) {
-                        throw new RuntimeException(e);
-                    }
-
-                    return solaceOpenTelemetryInstrumenter.traceIncoming(message, solaceTrace, true);
-                });
-            } else {
-                solaceOpenTelemetryInstrumenter = null;
-            }
-
-            this.stream = incomingMulti.plug(m -> lazyStart
+                    this.stream = incomingMulti.plug(m -> lazyStart
                             ? m.onSubscription()
-                            .call(() -> startReceiver(receiver))
+                                    .call(() -> startReceiver(receiver))
                             : m)
-                    .onItem().invoke(() -> alive.set(true))
-                    .onFailure().retry().withBackOff(Duration.ofSeconds(1)).atMost(3).onFailure().invoke(this::reportFailure);
+                            .onItem().invoke(() -> alive.set(true))
+                            .onFailure().retry().withBackOff(Duration.ofSeconds(1)).atMost(3).onFailure()
+                            .invoke(this::reportFailure);
 
-            if (!lazyStart) {
-                startReceiver(receiver);
-            }
-        })
-        .onFailure().invoke(this::reportFailure);
+                    if (!lazyStart) {
+                        startReceiver(receiver);
+                    }
+                })
+                .onFailure().invoke(this::reportFailure);
     }
 
     private synchronized void reportFailure(Throwable throwable) {
@@ -233,13 +237,15 @@ public class SolaceIncomingChannel {
                 session.addSubscription(queue, topic, JCSMPSession.WAIT_FOR_CONFIRM);
                 return Uni.createFrom().voidItem();
             } catch (JCSMPException e) {
-                SolaceLogging.log.errorf("Failed to subscribe topic %s on queue %s for channel %s", subscription, queue, channel, e);
+                SolaceLogging.log.errorf("Failed to subscribe topic %s on queue %s for channel %s", subscription, queue,
+                        channel, e);
                 throw new RuntimeException(e);
             }
         })).replaceWithVoid();
     }
 
-    private Uni<FlowReceiver> createReceiver(JCSMPSession solace, ConsumerFlowProperties flowProperties, EndpointProperties endpointProperties) {
+    private Uni<FlowReceiver> createReceiver(JCSMPSession solace, ConsumerFlowProperties flowProperties,
+            EndpointProperties endpointProperties) {
         return Uni.createFrom().item(Unchecked.supplier(() -> {
             try {
                 return solace.createFlow(null, flowProperties, endpointProperties);
@@ -263,7 +269,7 @@ public class SolaceIncomingChannel {
     }
 
     private Uni<SolaceTrace> initializeSolaceTracing(BytesXMLMessage consumedMessage, Map<String, String> messageProperties) {
-        return  Uni.createFrom().item(() -> {
+        return Uni.createFrom().item(() -> {
             SolaceTrace solaceTrace = null;
             try {
                 solaceTrace = new SolaceTrace.Builder()
@@ -274,17 +280,18 @@ public class SolaceIncomingChannel {
                         .withPartitionKey(
                                 consumedMessage.getProperties()
                                         .containsKey(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
-                                        ? consumedMessage.getProperties()
-                                        .getString(
-                                                XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
-                                        : null)
+                                                ? consumedMessage.getProperties()
+                                                        .getString(
+                                                                XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
+                                                : null)
                         .withPayloadSize((long) SolaceMessageUtils.getPayloadAsBytes(consumedMessage).length)
                         .withProperties(messageProperties)
                         .build();
 
                 return solaceTrace;
             } catch (SDTException e) {
-                SolaceLogging.log.errorf("Failed to initialize Solace Trace for message %s received on channel %s", consumedMessage.getReplicationGroupMessageId().toString(), channel, e);
+                SolaceLogging.log.errorf("Failed to initialize Solace Trace for message %s received on channel %s",
+                        consumedMessage.getReplicationGroupMessageId().toString(), channel, e);
                 throw new RuntimeException(e);
             }
         });

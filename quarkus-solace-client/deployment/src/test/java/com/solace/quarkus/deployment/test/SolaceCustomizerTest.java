@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.solacesystems.jcsmp.*;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
@@ -14,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.solace.quarkus.MessagingServiceClientCustomizer;
+import com.solacesystems.jcsmp.*;
 
 import io.quarkus.test.QuarkusUnitTest;
 

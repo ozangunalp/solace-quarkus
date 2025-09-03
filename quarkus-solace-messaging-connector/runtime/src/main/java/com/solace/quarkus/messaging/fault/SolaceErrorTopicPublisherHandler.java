@@ -7,13 +7,12 @@ import com.solacesystems.jcsmp.*;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.subscription.UniEmitter;
 
-import java.util.concurrent.CountDownLatch;
-
 class SolaceErrorTopicPublisherHandler {
 
     private final JCSMPSession solace;
     private final XMLMessageProducer publisher;
     private final OutboundErrorMessageMapper outboundErrorMessageMapper;
+
     public SolaceErrorTopicPublisherHandler(JCSMPSession solace) {
         this.solace = solace;
         try {
