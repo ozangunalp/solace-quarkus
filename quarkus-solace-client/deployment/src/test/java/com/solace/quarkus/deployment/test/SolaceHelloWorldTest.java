@@ -51,7 +51,8 @@ public class SolaceHelloWorldTest {
         await().until(() -> receiver.list().size() == 3);
 
         for (BytesXMLMessage message : receiver.list()) {
-            assertThat(new String(new String(message.getAttachmentByteBuffer().array(), StandardCharsets.UTF_8))).startsWith("Hello World");
+            assertThat(new String(new String(message.getAttachmentByteBuffer().array(), StandardCharsets.UTF_8)))
+                    .startsWith("Hello World");
         }
     }
 
