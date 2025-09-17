@@ -3,7 +3,6 @@ package com.solace.quarkus.messaging.locals;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
@@ -20,10 +19,10 @@ import org.eclipse.microprofile.reactive.messaging.Message;
 import org.eclipse.microprofile.reactive.messaging.Outgoing;
 import org.junit.jupiter.api.Test;
 
+import com.solace.messaging.publisher.PersistentMessagePublisher;
+import com.solace.messaging.resources.Topic;
 import com.solace.quarkus.messaging.SolaceConnector;
 import com.solace.quarkus.messaging.base.WeldTestBase;
-import com.solacesystems.jcsmp.*;
-import com.solacesystems.jcsmp.Topic;
 
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.smallrye.common.vertx.ContextLocals;
@@ -49,26 +48,15 @@ public class LocalPropagationTest extends WeldTestBase {
     }
 
     private void sendMessages() {
-        // Produce messages
-        XMLMessageProducer publisher = null;
-        try {
-            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
-                @Override
-                public void responseReceivedEx(Object o) {
-
-                }
-
-                @Override
-                public void handleErrorEx(Object o, JCSMPException e, long l) {
-
-                }
-            });
-            Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
-            for (int i = 1; i <= 5; i++) {
-                sendTextMessage(Integer.toString(i), publisher, tp);
-            }
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
+        PersistentMessagePublisher publisher = messagingService.createPersistentMessagePublisherBuilder()
+                .build()
+                .start();
+        Topic tp = Topic.of(topic);
+        for (int i = 0; i < 5; i++) {
+            publisher.publish(messagingService.messageBuilder()
+                    .withHTTPContentHeader(HttpHeaderValues.TEXT_PLAIN.toString(), "")
+                    .build(String.valueOf(i + 1)),
+                    tp, 1000);
         }
     }
 
@@ -590,19 +578,6 @@ public class LocalPropagationTest extends WeldTestBase {
 
         public List<Integer> getResults() {
             return list;
-        }
-    }
-
-    private void sendTextMessage(String payload, XMLMessageProducer publisher, Topic tp) {
-        BytesXMLMessage textMessage = JCSMPFactory.onlyInstance().createMessage(BytesXMLMessage.class);
-        textMessage.writeAttachment(payload.getBytes(StandardCharsets.UTF_8));
-        textMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
-        //        textMessage.setHTTPContentEncoding(HttpHeaderValues.TEXT_PLAIN.toString());
-        textMessage.setHTTPContentType(HttpHeaderValues.TEXT_PLAIN.toString());
-        try {
-            publisher.send(textMessage, tp);
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
         }
     }
 

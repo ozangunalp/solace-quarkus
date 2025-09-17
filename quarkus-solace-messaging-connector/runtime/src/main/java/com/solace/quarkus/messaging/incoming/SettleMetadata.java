@@ -1,28 +1,28 @@
 package com.solace.quarkus.messaging.incoming;
 
-import com.solacesystems.jcsmp.XMLMessage;
+import com.solace.messaging.config.MessageAcknowledgementConfiguration;
 
 public class SettleMetadata {
 
-    XMLMessage.Outcome settleOutcome;
+    MessageAcknowledgementConfiguration.Outcome settleOutcome;
 
     public static SettleMetadata accepted() {
-        return new SettleMetadata(XMLMessage.Outcome.ACCEPTED);
+        return new SettleMetadata(MessageAcknowledgementConfiguration.Outcome.ACCEPTED);
     }
 
     public static SettleMetadata rejected() {
-        return new SettleMetadata(XMLMessage.Outcome.REJECTED);
+        return new SettleMetadata(MessageAcknowledgementConfiguration.Outcome.REJECTED);
     }
 
     public static SettleMetadata failed() {
-        return new SettleMetadata(XMLMessage.Outcome.FAILED);
+        return new SettleMetadata(MessageAcknowledgementConfiguration.Outcome.FAILED);
     }
 
-    public SettleMetadata(XMLMessage.Outcome settleOutcome) {
+    public SettleMetadata(MessageAcknowledgementConfiguration.Outcome settleOutcome) {
         this.settleOutcome = settleOutcome;
     }
 
-    public XMLMessage.Outcome getOutcome() {
+    public MessageAcknowledgementConfiguration.Outcome getOutcome() {
         return settleOutcome;
     }
 }

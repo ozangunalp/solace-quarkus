@@ -16,15 +16,18 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
+import com.solace.messaging.config.SolaceConstants;
+import com.solace.messaging.publisher.DirectMessagePublisher;
+import com.solace.messaging.publisher.OutboundMessage;
+import com.solace.messaging.publisher.OutboundMessageBuilder;
+import com.solace.messaging.receiver.InboundMessage;
+import com.solace.messaging.resources.Topic;
 import com.solace.quarkus.messaging.base.SolaceContainer;
 import com.solace.quarkus.messaging.base.UnsatisfiedInstance;
 import com.solace.quarkus.messaging.base.WeldTestBase;
-import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
 import com.solace.quarkus.messaging.incoming.SolaceDirectMessageIncomingChannel;
 import com.solace.quarkus.messaging.incoming.SolaceInboundMessage;
 import com.solace.quarkus.messaging.logging.SolaceTestAppender;
-import com.solacesystems.jcsmp.*;
-import com.solacesystems.jcsmp.Topic;
 
 import io.smallrye.mutiny.Multi;
 import io.smallrye.reactive.messaging.test.common.config.MapBasedConfig;
@@ -51,26 +54,15 @@ public class SolaceDirectMessageConsumerTest extends WeldTestBase {
         MyConsumer app = runApplication(config, MyConsumer.class);
 
         // Produce messages
-        XMLMessageProducer publisher = null;
-        try {
-            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
-                @Override
-                public void responseReceivedEx(Object o) {
-
-                }
-
-                @Override
-                public void handleErrorEx(Object o, JCSMPException e, long l) {
-
-                }
-            });
-            Topic tp = JCSMPFactory.onlyInstance().createTopic("quarkus/integration/test/replay/messages");
-            for (int i = 1; i <= 5; i++) {
-                sendTextMessage(Integer.toString(i), publisher, tp);
-            }
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
+        DirectMessagePublisher publisher = messagingService.createDirectMessagePublisherBuilder()
+                .build()
+                .start();
+        Topic tp = Topic.of("quarkus/integration/test/replay/messages");
+        publisher.publish("1", tp);
+        publisher.publish("2", tp);
+        publisher.publish("3", tp);
+        publisher.publish("4", tp);
+        publisher.publish("5", tp);
 
         // Assert on published messages
         await().untilAsserted(() -> assertThat(app.getReceived()).contains("1", "2", "3", "4", "5"));
@@ -96,24 +88,13 @@ public class SolaceDirectMessageConsumerTest extends WeldTestBase {
         MyErrorQueueConsumer app = runApplication(config, MyErrorQueueConsumer.class);
 
         // Produce messages
-        XMLMessageProducer publisher = null;
-        try {
-            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
-                @Override
-                public void responseReceivedEx(Object o) {
-
-                }
-
-                @Override
-                public void handleErrorEx(Object o, JCSMPException e, long l) {
-
-                }
-            });
-            Topic tp = JCSMPFactory.onlyInstance().createTopic(SolaceContainer.INTEGRATION_TEST_QUEUE_SUBSCRIPTION);
-            sendTextMessage("1", publisher, tp);
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
+        DirectMessagePublisher publisher = messagingService.createDirectMessagePublisherBuilder()
+                .build()
+                .start();
+        Topic tp = Topic.of(SolaceContainer.INTEGRATION_TEST_QUEUE_SUBSCRIPTION);
+        OutboundMessageBuilder messageBuilder = messagingService.messageBuilder();
+        OutboundMessage outboundMessage = messageBuilder.build("1");
+        publisher.publish(outboundMessage, tp);
 
         // Assert on published messages
         await().untilAsserted(() -> assertThat(app.getReceived().size()).isEqualTo(0));
@@ -140,26 +121,14 @@ public class SolaceDirectMessageConsumerTest extends WeldTestBase {
 
         // Run app that consumes messages
         MyErrorQueueConsumer app = runApplication(config, MyErrorQueueConsumer.class);
-
         // Produce messages
-        XMLMessageProducer publisher = null;
-        try {
-            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
-                @Override
-                public void responseReceivedEx(Object o) {
-
-                }
-
-                @Override
-                public void handleErrorEx(Object o, JCSMPException e, long l) {
-
-                }
-            });
-            Topic tp = JCSMPFactory.onlyInstance().createTopic(SolaceContainer.INTEGRATION_TEST_QUEUE_SUBSCRIPTION);
-            sendTextMessage("2", publisher, tp);
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
+        DirectMessagePublisher publisher = messagingService.createDirectMessagePublisherBuilder()
+                .build()
+                .start();
+        Topic tp = Topic.of(SolaceContainer.INTEGRATION_TEST_QUEUE_SUBSCRIPTION);
+        OutboundMessageBuilder messageBuilder = messagingService.messageBuilder();
+        OutboundMessage outboundMessage = messageBuilder.build("2");
+        publisher.publish(outboundMessage, tp);
 
         await().untilAsserted(() -> assertThat(app.getReceivedFailedMessages().size()).isEqualTo(0));
         //        await().untilAsserted(() -> assertThat(inMemoryLogHandler.getRecords().stream().filter(record -> record.getMessage().contains("A exception occurred when publishing to topic")).count()).isEqualTo(4));
@@ -178,7 +147,7 @@ public class SolaceDirectMessageConsumerTest extends WeldTestBase {
 
         // Initialize incoming channel to consumes messages
         SolaceDirectMessageIncomingChannel solaceIncomingChannel = new SolaceDirectMessageIncomingChannel(Vertx.vertx(),
-                UnsatisfiedInstance.instance(), new SolaceConnectorIncomingConfiguration(config), session);
+                UnsatisfiedInstance.instance(), new SolaceConnectorIncomingConfiguration(config), messagingService);
 
         CopyOnWriteArrayList<Object> list = new CopyOnWriteArrayList<>();
         CopyOnWriteArrayList<Object> ackedMessageList = new CopyOnWriteArrayList<>();
@@ -194,26 +163,15 @@ public class SolaceDirectMessageConsumerTest extends WeldTestBase {
         });
 
         // Produce messages
-        XMLMessageProducer publisher = null;
-        try {
-            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
-                @Override
-                public void responseReceivedEx(Object o) {
-
-                }
-
-                @Override
-                public void handleErrorEx(Object o, JCSMPException e, long l) {
-
-                }
-            });
-            Topic tp = JCSMPFactory.onlyInstance().createTopic(topic);
-            for (int i = 1; i <= 5; i++) {
-                sendTextMessage(Integer.toString(i), publisher, tp);
-            }
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
+        DirectMessagePublisher publisher = messagingService.createDirectMessagePublisherBuilder()
+                .build()
+                .start();
+        Topic tp = Topic.of(topic);
+        publisher.publish("1", tp);
+        publisher.publish("2", tp);
+        publisher.publish("3", tp);
+        publisher.publish("4", tp);
+        publisher.publish("5", tp);
 
         await().until(() -> list.size() == 5);
         // Assert on acknowledged messages
@@ -228,7 +186,7 @@ public class SolaceDirectMessageConsumerTest extends WeldTestBase {
 
         @Incoming("in")
         CompletionStage<Void> in(SolaceInboundMessage<byte[]> msg) {
-            received.add(SolaceMessageUtils.getPayloadAsString(msg.getMessage()));
+            received.add(msg.getMessage().getPayloadAsString());
             return msg.ack();
         }
 
@@ -249,8 +207,8 @@ public class SolaceDirectMessageConsumerTest extends WeldTestBase {
         }
 
         @Incoming("dmq-in")
-        void dmqin(BytesXMLMessage msg) {
-            receivedDMQMessages.add(SolaceMessageUtils.getPayloadAsString(msg));
+        void dmqin(InboundMessage msg) {
+            receivedDMQMessages.add(msg.getPayloadAsString());
         }
 
         public List<String> getReceived() {
@@ -273,8 +231,8 @@ public class SolaceDirectMessageConsumerTest extends WeldTestBase {
         }
 
         @Incoming("error-in")
-        void errorin(BytesXMLMessage msg) {
-            receivedFailedMessages.add(SolaceMessageUtils.getPayloadAsString(msg));
+        void errorin(InboundMessage msg) {
+            receivedFailedMessages.add(msg.getPayloadAsString());
         }
 
         public List<String> getReceived() {
@@ -322,31 +280,14 @@ public class SolaceDirectMessageConsumerTest extends WeldTestBase {
         }
 
         private void updatePartitionMessages(SolaceInboundMessage<?> msg) {
-            String partitionKey = null;
-            try {
-                partitionKey = msg.getMessage().getProperties()
-                        .getString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY);
-                int count = partitionMessages.get(partitionKey);
-                partitionMessages.put(partitionKey, (count + 1));
-            } catch (SDTException e) {
-                throw new RuntimeException(e);
-            }
-
+            String partitionKey = msg.getMessage()
+                    .getProperty(SolaceConstants.MessageUserPropertyConstants.QUEUE_PARTITION_KEY);
+            int count = partitionMessages.get(partitionKey);
+            partitionMessages.put(partitionKey, (count + 1));
         }
 
         public Map<String, Integer> getPartitionMessages() {
             return partitionMessages;
-        }
-    }
-
-    private void sendTextMessage(String payload, XMLMessageProducer publisher, Topic tp) {
-        TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-        textMessage.setText(payload);
-        textMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
-        try {
-            publisher.send(textMessage, tp);
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
         }
     }
 }

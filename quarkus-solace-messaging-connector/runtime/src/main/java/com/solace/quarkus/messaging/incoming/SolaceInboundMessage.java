@@ -9,10 +9,9 @@ import java.util.function.Supplier;
 
 import org.eclipse.microprofile.reactive.messaging.Metadata;
 
-import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
+import com.solace.messaging.receiver.InboundMessage;
 import com.solace.quarkus.messaging.fault.SolaceFailureHandler;
 import com.solace.quarkus.messaging.i18n.SolaceLogging;
-import com.solacesystems.jcsmp.BytesXMLMessage;
 
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.smallrye.mutiny.Uni;
@@ -22,7 +21,7 @@ import io.vertx.core.buffer.Buffer;
 
 public class SolaceInboundMessage<T> implements ContextAwareMessage<T>, MetadataInjectableMessage<T> {
 
-    private final BytesXMLMessage msg;
+    private final InboundMessage msg;
     private final SolaceAckHandler ackHandler;
     private final SolaceFailureHandler nackHandler;
     private final T payload;
@@ -30,7 +29,7 @@ public class SolaceInboundMessage<T> implements ContextAwareMessage<T>, Metadata
     private final Consumer<Throwable> reportFailure;
     private Metadata metadata;
 
-    public SolaceInboundMessage(BytesXMLMessage message, SolaceAckHandler ackHandler, SolaceFailureHandler nackHandler,
+    public SolaceInboundMessage(InboundMessage message, SolaceAckHandler ackHandler, SolaceFailureHandler nackHandler,
             IncomingMessagesUnsignedCounterBarrier unacknowledgedMessageTracker, Consumer<Throwable> reportFailure) {
         this.msg = message;
         this.unacknowledgedMessageTracker = unacknowledgedMessageTracker;
@@ -41,7 +40,7 @@ public class SolaceInboundMessage<T> implements ContextAwareMessage<T>, Metadata
         this.reportFailure = reportFailure;
     }
 
-    public BytesXMLMessage getMessage() {
+    public InboundMessage getMessage() {
         return msg;
     }
 
@@ -52,9 +51,9 @@ public class SolaceInboundMessage<T> implements ContextAwareMessage<T>, Metadata
 
     private Object convertPayload() {
         // Neither of these are guaranteed to be non-null
-        final String contentType = msg.getHTTPContentType();
-        final String contentEncoding = msg.getHTTPContentEncoding();
-        final Buffer body = Buffer.buffer(SolaceMessageUtils.getPayloadAsBytes(msg));
+        final String contentType = msg.getRestInteroperabilitySupport().getHTTPContentType();
+        final String contentEncoding = msg.getRestInteroperabilitySupport().getHTTPContentEncoding();
+        final Buffer body = Buffer.buffer(msg.getPayloadAsBytes());
 
         // If there is a content encoding specified, we don't try to unwrap
         if (contentEncoding == null || contentEncoding.isBlank()) {

@@ -15,13 +15,13 @@ import org.eclipse.microprofile.reactive.messaging.Metadata;
 import org.eclipse.microprofile.reactive.messaging.Outgoing;
 import org.junit.jupiter.api.Test;
 
+import com.solace.messaging.receiver.PersistentMessageReceiver;
+import com.solace.messaging.resources.Queue;
+import com.solace.messaging.resources.TopicSubscription;
 import com.solace.quarkus.messaging.base.UnsatisfiedInstance;
 import com.solace.quarkus.messaging.base.WeldTestBase;
-import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
 import com.solace.quarkus.messaging.outgoing.SolaceOutboundMetadata;
 import com.solace.quarkus.messaging.outgoing.SolaceOutgoingChannel;
-import com.solacesystems.jcsmp.*;
-import com.solacesystems.jcsmp.Queue;
 
 import io.smallrye.mutiny.Multi;
 import io.smallrye.reactive.messaging.test.common.config.MapBasedConfig;
@@ -37,29 +37,12 @@ public class SolacePublisherTest extends WeldTestBase {
 
         List<String> expected = new CopyOnWriteArrayList<>();
 
-        try {
-            // Start listening first
-            EndpointProperties endpointProperties = new EndpointProperties();
-            endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
-            Queue queue = session.createTemporaryQueue();
-            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
-            consumerFlowProperties.setEndpoint(queue);
-            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
-                @Override
-                public void onReceive(BytesXMLMessage bytesXMLMessage) {
-                    expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
-                }
-
-                @Override
-                public void onException(JCSMPException e) {
-
-                }
-            }, consumerFlowProperties, endpointProperties);
-            session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(topic), JCSMPSession.WAIT_FOR_CONFIRM);
-            receiver.start();
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
+        // Start listening first
+        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
+                .withSubscriptions(TopicSubscription.of(topic))
+                .build(Queue.nonDurableExclusiveQueue());
+        receiver.receiveAsync(inboundMessage -> expected.add(inboundMessage.getPayloadAsString()));
+        receiver.start();
 
         // Run app that publish messages
         MyApp app = runApplication(config, MyApp.class);
@@ -77,31 +60,14 @@ public class SolacePublisherTest extends WeldTestBase {
 
         List<String> expected = new CopyOnWriteArrayList<>();
 
-        try {
-            // Start listening first
-            EndpointProperties endpointProperties = new EndpointProperties();
-            endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
-            Queue queue = session.createTemporaryQueue();
-
-            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
-            consumerFlowProperties.setEndpoint(queue);
-            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
-                @Override
-                public void onReceive(BytesXMLMessage bytesXMLMessage) {
-                    expected.add(bytesXMLMessage.getDestination().getName());
-                }
-
-                @Override
-                public void onException(JCSMPException e) {
-
-                }
-            }, consumerFlowProperties, endpointProperties);
-            session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic("quarkus/integration/test/dynamic/topic/*"),
-                    JCSMPSession.WAIT_FOR_CONFIRM);
-            receiver.start();
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
+        // Start listening first
+        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
+                .withSubscriptions(TopicSubscription.of("quarkus/integration/test/dynamic/topic/*"))
+                .build(Queue.nonDurableExclusiveQueue());
+        receiver.receiveAsync(inboundMessage -> {
+            expected.add(inboundMessage.getDestinationName());
+        });
+        receiver.start();
 
         // Run app that publish messages
         MyDynamicDestinationApp app = runApplication(config, MyDynamicDestinationApp.class);
@@ -113,45 +79,29 @@ public class SolacePublisherTest extends WeldTestBase {
                 "quarkus/integration/test/dynamic/topic/4", "quarkus/integration/test/dynamic/topic/5"));
     }
 
-    //    @Test
-    //    void publisherWithBackPressureReject() {
-    //        MapBasedConfig config = commonConfig()
-    //                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
-    //                .with("mp.messaging.outgoing.out.producer.topic", topic)
-    //                .with("mp.messaging.outgoing.out.producer.back-pressure.buffer-capacity", 1);
-    //
-    //        List<String> expected = new CopyOnWriteArrayList<>();
-    //
-    //        try {
-    //            // Start listening first
-    //            EndpointProperties endpointProperties = new EndpointProperties();
-    //            endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
-    //            Queue queue = session.createTemporaryQueue();
-    //
-    //            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
-    //            consumerFlowProperties.setEndpoint(queue);
-    //            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
-    //                @Override
-    //                public void onReceive(BytesXMLMessage bytesXMLMessage) {
-    //                    expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
-    //                }
-    //
-    //                @Override
-    //                public void onException(JCSMPException e) {
-    //
-    //                }
-    //            }, consumerFlowProperties, endpointProperties);
-    //            session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic("topic"), JCSMPSession.WAIT_FOR_CONFIRM);
-    //            receiver.start();
-    //        } catch (JCSMPException e) {
-    //            throw new RuntimeException(e);
-    //        }
-    //
-    //        // Run app that publish messages
-    //        MyApp app = runApplication(config, MyApp.class);
-    //        // Assert on published messages
-    //        await().untilAsserted(() -> assertThat(app.getAcked().size()).isLessThan(5));
-    //    }
+    @Test
+    void publisherWithBackPressureReject() {
+        MapBasedConfig config = commonConfig()
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.producer.topic", topic)
+                .with("mp.messaging.outgoing.out.producer.back-pressure.buffer-capacity", 1);
+
+        List<String> expected = new CopyOnWriteArrayList<>();
+
+        // Start listening first
+        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
+                .withSubscriptions(TopicSubscription.of("topic"))
+                .build(Queue.nonDurableExclusiveQueue());
+        receiver.receiveAsync(inboundMessage -> {
+            expected.add(inboundMessage.getPayloadAsString());
+        });
+        receiver.start();
+
+        // Run app that publish messages
+        MyApp app = runApplication(config, MyApp.class);
+        // Assert on published messages
+        await().untilAsserted(() -> assertThat(app.getAcked().size()).isLessThan(5));
+    }
 
     @Test
     void publisherGracefulCloseTest() {
@@ -161,33 +111,15 @@ public class SolacePublisherTest extends WeldTestBase {
 
         List<String> expected = new CopyOnWriteArrayList<>();
 
-        try {
-            // Start listening first
-            EndpointProperties endpointProperties = new EndpointProperties();
-            endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
-            Queue queue = session.createTemporaryQueue();
-
-            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
-            consumerFlowProperties.setEndpoint(queue);
-            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
-                @Override
-                public void onReceive(BytesXMLMessage bytesXMLMessage) {
-                    expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
-                }
-
-                @Override
-                public void onException(JCSMPException e) {
-
-                }
-            }, consumerFlowProperties, endpointProperties);
-            session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(topic), JCSMPSession.WAIT_FOR_CONFIRM);
-            receiver.start();
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
+        // Start listening first
+        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
+                .withSubscriptions(TopicSubscription.of(topic))
+                .build(Queue.nonDurableExclusiveQueue());
+        receiver.receiveAsync(inboundMessage -> expected.add(inboundMessage.getPayloadAsString()));
+        receiver.start();
 
         SolaceOutgoingChannel solaceOutgoingChannel = new SolaceOutgoingChannel(Vertx.vertx(), UnsatisfiedInstance.instance(),
-                new SolaceConnectorOutgoingConfiguration(config), session);
+                new SolaceConnectorOutgoingConfiguration(config), messagingService);
         // Publish messages
         Multi.createFrom().range(0, 10)
                 .map(Message::of)

@@ -3,7 +3,6 @@ package com.solace.quarkus.deployment.test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -16,7 +15,12 @@ import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import com.solacesystems.jcsmp.*;
+import com.solace.messaging.MessagingService;
+import com.solace.messaging.publisher.DirectMessagePublisher;
+import com.solace.messaging.receiver.DirectMessageReceiver;
+import com.solace.messaging.receiver.InboundMessage;
+import com.solace.messaging.resources.Topic;
+import com.solace.messaging.resources.TopicSubscription;
 
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
@@ -50,9 +54,8 @@ public class SolaceHelloWorldTest {
 
         await().until(() -> receiver.list().size() == 3);
 
-        for (BytesXMLMessage message : receiver.list()) {
-            assertThat(new String(new String(message.getAttachmentByteBuffer().array(), StandardCharsets.UTF_8)))
-                    .startsWith("Hello World");
+        for (InboundMessage message : receiver.list()) {
+            assertThat(message.getPayloadAsString()).startsWith("Hello World");
         }
     }
 
@@ -60,76 +63,43 @@ public class SolaceHelloWorldTest {
     public static class HelloWorldReceiver {
 
         @Inject
-        JCSMPSession session;
-        private XMLMessageConsumer receiver;
-        private final List<BytesXMLMessage> list = new CopyOnWriteArrayList<>();
+        MessagingService messagingService;
+        private DirectMessageReceiver receiver;
+        private final List<InboundMessage> list = new CopyOnWriteArrayList<>();
 
         public void init(@Observes StartupEvent ev) {
-            try {
-                receiver = session.getMessageConsumer(new XMLMessageListener() {
-                    @Override
-                    public void onReceive(BytesXMLMessage bytesXMLMessage) {
-                        list.add(bytesXMLMessage);
-                    }
-
-                    @Override
-                    public void onException(JCSMPException e) {
-
-                    }
-                });
-                session.addSubscription(JCSMPFactory.onlyInstance().createTopic("hello/direct"));
-                receiver.start();
-            } catch (JCSMPException e) {
-                throw new RuntimeException(e);
-            }
+            receiver = messagingService.createDirectMessageReceiverBuilder()
+                    .withSubscriptions(TopicSubscription.of("hello/direct")).build().start();
+            receiver.receiveAsync(list::add);
         }
 
-        public List<BytesXMLMessage> list() {
+        public List<InboundMessage> list() {
             return list;
         }
 
         public void stop(@Observes ShutdownEvent ev) {
-            receiver.close();
+            receiver.terminate(1);
         }
     }
 
     @ApplicationScoped
     public static class HelloWorldPublisher {
         @Inject
-        JCSMPSession session;
-        private XMLMessageProducer publisher;
+        MessagingService messagingService;
+        private DirectMessagePublisher publisher;
 
         public void init(@Observes StartupEvent ev) {
-            try {
-                publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
-                    @Override
-                    public void responseReceivedEx(Object o) {
-
-                    }
-
-                    @Override
-                    public void handleErrorEx(Object o, JCSMPException e, long l) {
-
-                    }
-                });
-            } catch (JCSMPException e) {
-                throw new RuntimeException(e);
-            }
+            publisher = messagingService.createDirectMessagePublisherBuilder()
+                    .onBackPressureWait(1).build().start();
         }
 
         public void send(String message) {
             String topicString = "hello/direct";
-            BytesXMLMessage bytesXMLMessage = JCSMPFactory.onlyInstance().createMessage(BytesXMLMessage.class);
-            bytesXMLMessage.writeAttachment(message.getBytes(StandardCharsets.UTF_8));
-            try {
-                publisher.send(bytesXMLMessage, JCSMPFactory.onlyInstance().createTopic(topicString));
-            } catch (JCSMPException e) {
-                throw new RuntimeException(e);
-            }
+            publisher.publish(message, Topic.of(topicString));
         }
 
         public void stop(@Observes ShutdownEvent ev) {
-            publisher.close();
+            publisher.terminate(1);
         }
     }
 }

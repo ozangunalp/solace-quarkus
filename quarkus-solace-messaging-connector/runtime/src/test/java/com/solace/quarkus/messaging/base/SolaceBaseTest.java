@@ -1,6 +1,7 @@
 package com.solace.quarkus.messaging.base;
 
 import java.lang.reflect.Method;
+import java.util.Properties;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeAll;
@@ -8,14 +9,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import com.solacesystems.jcsmp.*;
+import com.solace.messaging.MessagingService;
+import com.solace.messaging.config.SolaceProperties;
+import com.solace.messaging.config.profile.ConfigurationProfile;
 
 @ExtendWith(SolaceBrokerExtension.class)
 public class SolaceBaseTest {
 
     public static SolaceContainer solace;
 
-    public static JCSMPSession session;
+    public static MessagingService messagingService;
 
     public String topic;
 
@@ -33,25 +36,23 @@ public class SolaceBaseTest {
         String cn = testInfo.getTestClass().map(Class::getSimpleName).orElse(UUID.randomUUID().toString());
         String mn = testInfo.getTestMethod().map(Method::getName).orElse(UUID.randomUUID().toString());
         queue = cn + "." + mn + "." + UUID.randomUUID().getMostSignificantBits();
+
     }
 
     @BeforeAll
     static void init(SolaceContainer container) {
         solace = container;
-        JCSMPProperties properties = new JCSMPProperties();
-        properties.setProperty(JCSMPProperties.HOST, solace.getOrigin(SolaceContainer.Service.SMF));
-        properties.setProperty(JCSMPProperties.VPN_NAME, solace.getVpn());
-        properties.setProperty(JCSMPProperties.USERNAME, solace.getUsername());
-        properties.setProperty(JCSMPProperties.PASSWORD, solace.getPassword());
+        Properties properties = new Properties();
+        properties.put(SolaceProperties.TransportLayerProperties.HOST, solace.getOrigin(SolaceContainer.Service.SMF));
+        properties.put(SolaceProperties.ServiceProperties.VPN_NAME, solace.getVpn());
+        properties.put(SolaceProperties.AuthenticationProperties.SCHEME_BASIC_USER_NAME, solace.getUsername());
+        properties.put(SolaceProperties.AuthenticationProperties.SCHEME_BASIC_PASSWORD, solace.getPassword());
 
-        try {
-            session = JCSMPFactory.onlyInstance().createSession(properties);
-            session.connect();
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
-
-        MessagingServiceProvider.messagingService = session;
+        messagingService = MessagingService.builder(ConfigurationProfile.V1)
+                .fromProperties(properties)
+                .build();
+        messagingService.connect();
+        MessagingServiceProvider.messagingService = messagingService;
     }
 
 }

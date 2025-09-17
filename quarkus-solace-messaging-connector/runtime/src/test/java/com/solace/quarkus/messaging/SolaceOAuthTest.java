@@ -5,6 +5,7 @@ import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
 import java.io.*;
 import java.security.KeyStore;
 import java.security.cert.CertificateFactory;
+import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.*;
 
@@ -20,12 +21,15 @@ import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
 import org.testcontainers.utility.MountableFile;
 
+import com.solace.messaging.MessagingService;
+import com.solace.messaging.config.SolaceProperties;
+import com.solace.messaging.config.profile.ConfigurationProfile;
+import com.solace.messaging.publisher.PersistentMessagePublisher;
+import com.solace.messaging.resources.Topic;
 import com.solace.quarkus.messaging.base.KeyCloakContainer;
 import com.solace.quarkus.messaging.base.SolaceContainer;
 import com.solace.quarkus.messaging.base.UnsatisfiedInstance;
 import com.solace.quarkus.messaging.incoming.SolaceIncomingChannel;
-import com.solacesystems.jcsmp.*;
-import com.solacesystems.jcsmp.Topic;
 
 import io.smallrye.mutiny.Multi;
 import io.smallrye.reactive.messaging.test.common.config.MapBasedConfig;
@@ -104,24 +108,22 @@ public class SolaceOAuthTest {
         return keycloak.tokenManager().getAccessTokenString();
     }
 
-    private JCSMPSession getMessagingService() throws IOException {
-        JCSMPProperties properties = new JCSMPProperties();
-        properties.setProperty(JCSMPProperties.HOST,
+    private MessagingService getMessagingService() throws IOException {
+        Properties properties = new Properties();
+        properties.put(SolaceProperties.TransportLayerProperties.HOST,
                 solaceContainer.getOrigin(SolaceContainer.Service.SMF_SSL));
-        properties.setProperty(JCSMPProperties.VPN_NAME, solaceContainer.getVpn());
-        properties.setProperty(JCSMPProperties.AUTHENTICATION_SCHEME, "AUTHENTICATION_SCHEME_OAUTH2");
-        properties.setProperty(JCSMPProperties.SSL_VALIDATE_CERTIFICATE, false);
-        properties.setProperty(JCSMPProperties.SSL_VALIDATE_CERTIFICATE_HOST, false);
-        properties.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, getAccessToken());
+        properties.put(SolaceProperties.ServiceProperties.VPN_NAME, solaceContainer.getVpn());
+        properties.put(SolaceProperties.AuthenticationProperties.SCHEME, "AUTHENTICATION_SCHEME_OAUTH2");
+        properties.put(SolaceProperties.TransportLayerSecurityProperties.CERT_VALIDATED, "false");
+        properties.put(SolaceProperties.TransportLayerSecurityProperties.CERT_VALIDATE_SERVERNAME, "false");
+        properties.put(SolaceProperties.AuthenticationProperties.SCHEME_OAUTH2_ACCESS_TOKEN, getAccessToken());
 
-        JCSMPSession session = null;
-        try {
-            session = JCSMPFactory.onlyInstance().createSession(properties);
-            session.connect();
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
-        return session;
+        MessagingService messagingService = MessagingService.builder(ConfigurationProfile.V1)
+                .fromProperties(properties)
+                .build();
+        messagingService.connect();
+
+        return messagingService;
     }
 
     @Test
@@ -133,9 +135,9 @@ public class SolaceOAuthTest {
                 .with("consumer.queue.missing-resource-creation-strategy", "create-on-start")
                 .with("consumer.subscriptions", SolaceContainer.INTEGRATION_TEST_QUEUE_SUBSCRIPTION);
 
-        JCSMPSession session = getMessagingService();
+        MessagingService messagingService = getMessagingService();
         SolaceIncomingChannel solaceIncomingChannel = new SolaceIncomingChannel(Vertx.vertx(), UnsatisfiedInstance.instance(),
-                new SolaceConnectorIncomingConfiguration(config), session);
+                new SolaceConnectorIncomingConfiguration(config), messagingService);
 
         CopyOnWriteArrayList<Object> list = new CopyOnWriteArrayList<>();
         CopyOnWriteArrayList<Object> ackedMessageList = new CopyOnWriteArrayList<>();
@@ -151,43 +153,21 @@ public class SolaceOAuthTest {
         });
 
         // Produce messages
-        XMLMessageProducer publisher = null;
-        try {
-            publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
-                @Override
-                public void responseReceivedEx(Object o) {
-
-                }
-
-                @Override
-                public void handleErrorEx(Object o, JCSMPException e, long l) {
-
-                }
-            });
-            Topic tp = JCSMPFactory.onlyInstance().createTopic(SolaceContainer.INTEGRATION_TEST_QUEUE_SUBSCRIPTION);
-            for (int i = 1; i <= 5; i++) {
-                sendTextMessage(Integer.toString(i), publisher, tp);
-            }
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
+        PersistentMessagePublisher publisher = messagingService.createPersistentMessagePublisherBuilder()
+                .build()
+                .start();
+        Topic tp = Topic.of(SolaceContainer.INTEGRATION_TEST_QUEUE_SUBSCRIPTION);
+        publisher.publish("1", tp);
+        publisher.publish("2", tp);
+        publisher.publish("3", tp);
+        publisher.publish("4", tp);
+        publisher.publish("5", tp);
 
         Awaitility.await().until(() -> list.size() == 5);
         // Assert on acknowledged messages
         solaceIncomingChannel.close();
         Awaitility.await().atMost(2, TimeUnit.MINUTES).until(() -> ackedMessageList.size() == 5);
         executorService.shutdown();
-    }
-
-    private void sendTextMessage(String payload, XMLMessageProducer publisher, Topic tp) {
-        TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-        textMessage.setText(payload);
-        textMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
-        try {
-            publisher.send(textMessage, tp);
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
     }
 
 }

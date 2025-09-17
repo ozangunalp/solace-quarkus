@@ -12,8 +12,11 @@ import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import com.solace.messaging.MessagingService;
+import com.solace.messaging.MessagingServiceClientBuilder;
+import com.solace.messaging.config.RetryStrategy;
+import com.solace.messaging.publisher.DirectMessagePublisher;
 import com.solace.quarkus.MessagingServiceClientCustomizer;
-import com.solacesystems.jcsmp.*;
 
 import io.quarkus.test.QuarkusUnitTest;
 
@@ -27,30 +30,14 @@ public class SolaceCustomizerTest {
     @Inject
     MyCustomizer customizer;
     @Inject
-    JCSMPSession solace;
+    MessagingService solace;
 
     @Test
     public void test() {
-        try {
-            XMLMessageProducer prod = solace.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
-                @Override
-                public void responseReceivedEx(Object o) {
-
-                }
-
-                @Override
-                public void handleErrorEx(Object o, JCSMPException e, long l) {
-
-                }
-            });
-            assertThat(customizer.called()).isTrue();
-            prod.close();
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
-
-        //        DirectMessagePublisher publisher = solace.createDirectMessagePublisherBuilder()
-        //                .build().start();
+        DirectMessagePublisher publisher = solace.createDirectMessagePublisherBuilder()
+                .build().start();
+        assertThat(customizer.called()).isTrue();
+        publisher.terminate(1);
     }
 
     @Singleton
@@ -59,10 +46,9 @@ public class SolaceCustomizerTest {
         AtomicBoolean called = new AtomicBoolean();
 
         @Override
-        public JCSMPProperties customize(JCSMPProperties builder) {
+        public MessagingServiceClientBuilder customize(MessagingServiceClientBuilder builder) {
             called.set(true);
-            builder.setProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES_RECONNECT_RETRIES, 0);
-            return builder;
+            return builder.withReconnectionRetryStrategy(RetryStrategy.neverRetry());
         }
 
         public boolean called() {

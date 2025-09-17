@@ -15,12 +15,12 @@ import org.eclipse.microprofile.reactive.messaging.Metadata;
 import org.eclipse.microprofile.reactive.messaging.Outgoing;
 import org.junit.jupiter.api.Test;
 
+import com.solace.messaging.receiver.DirectMessageReceiver;
+import com.solace.messaging.resources.TopicSubscription;
 import com.solace.quarkus.messaging.base.UnsatisfiedInstance;
 import com.solace.quarkus.messaging.base.WeldTestBase;
-import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
 import com.solace.quarkus.messaging.outgoing.SolaceOutboundMetadata;
 import com.solace.quarkus.messaging.outgoing.SolaceOutgoingChannel;
-import com.solacesystems.jcsmp.*;
 
 import io.smallrye.mutiny.Multi;
 import io.smallrye.reactive.messaging.test.common.config.MapBasedConfig;
@@ -37,24 +37,12 @@ public class SolaceDirectMessagePublisherTest extends WeldTestBase {
 
         List<String> expected = new CopyOnWriteArrayList<>();
 
-        try {
-            // Start listening first
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
-                @Override
-                public void onReceive(BytesXMLMessage bytesXMLMessage) {
-                    expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
-                }
-
-                @Override
-                public void onException(JCSMPException e) {
-
-                }
-            });
-            session.addSubscription(JCSMPFactory.onlyInstance().createTopic(topic));
-            receiver.start();
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
+        // Start listening first
+        DirectMessageReceiver receiver = messagingService.createDirectMessageReceiverBuilder()
+                .withSubscriptions(TopicSubscription.of(topic))
+                .build();
+        receiver.receiveAsync(inboundMessage -> expected.add(inboundMessage.getPayloadAsString()));
+        receiver.start();
 
         // Run app that publish messages
         MyApp app = runApplication(config, MyApp.class);
@@ -73,24 +61,14 @@ public class SolaceDirectMessagePublisherTest extends WeldTestBase {
 
         List<String> expected = new CopyOnWriteArrayList<>();
 
-        try {
-            // Start listening first
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
-                @Override
-                public void onReceive(BytesXMLMessage bytesXMLMessage) {
-                    expected.add(bytesXMLMessage.getDestination().getName());
-                }
-
-                @Override
-                public void onException(JCSMPException e) {
-
-                }
-            });
-            session.addSubscription(JCSMPFactory.onlyInstance().createTopic("quarkus/integration/test/dynamic/topic/*"));
-            receiver.start();
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
+        // Start listening first
+        DirectMessageReceiver receiver = messagingService.createDirectMessageReceiverBuilder()
+                .withSubscriptions(TopicSubscription.of("quarkus/integration/test/dynamic/topic/*"))
+                .build();
+        receiver.receiveAsync(inboundMessage -> {
+            expected.add(inboundMessage.getDestinationName());
+        });
+        receiver.start();
 
         // Run app that publish messages
         MyDynamicDestinationApp app = runApplication(config, MyDynamicDestinationApp.class);
@@ -111,27 +89,15 @@ public class SolaceDirectMessagePublisherTest extends WeldTestBase {
 
         List<String> expected = new CopyOnWriteArrayList<>();
 
-        try {
-            // Start listening first
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
-                @Override
-                public void onReceive(BytesXMLMessage bytesXMLMessage) {
-                    expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
-                }
-
-                @Override
-                public void onException(JCSMPException e) {
-
-                }
-            });
-            session.addSubscription(JCSMPFactory.onlyInstance().createTopic(topic));
-            receiver.start();
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
+        // Start listening first
+        DirectMessageReceiver receiver = messagingService.createDirectMessageReceiverBuilder()
+                .withSubscriptions(TopicSubscription.of(topic))
+                .build();
+        receiver.receiveAsync(inboundMessage -> expected.add(inboundMessage.getPayloadAsString()));
+        receiver.start();
 
         SolaceOutgoingChannel solaceOutgoingChannel = new SolaceOutgoingChannel(Vertx.vertx(), UnsatisfiedInstance.instance(),
-                new SolaceConnectorOutgoingConfiguration(config), session);
+                new SolaceConnectorOutgoingConfiguration(config), messagingService);
         // Publish messages
         Multi.createFrom().range(0, 10)
                 .map(Message::of)

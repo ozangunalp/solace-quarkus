@@ -7,18 +7,18 @@ import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Liveness;
 
-import com.solacesystems.jcsmp.JCSMPSession;
+import com.solace.messaging.MessagingService;
 
 @Liveness
 @ApplicationScoped
 public class SolaceHealthCheck implements HealthCheck {
 
     @Inject
-    JCSMPSession solace;
+    MessagingService solace;
 
     @Override
     public HealthCheckResponse call() {
-        if (!solace.isClosed()) {
+        if (!solace.isConnected()) {
             return HealthCheckResponse.down("solace");
         }
         return HealthCheckResponse.up("solace");

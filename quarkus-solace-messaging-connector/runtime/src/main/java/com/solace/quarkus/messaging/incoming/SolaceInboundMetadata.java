@@ -3,50 +3,52 @@ package com.solace.quarkus.messaging.incoming;
 import java.io.Serializable;
 import java.util.Map;
 
-import com.solace.quarkus.messaging.converters.Converter;
-import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
-import com.solacesystems.jcsmp.*;
+import com.solace.messaging.PubSubPlusClientException;
+import com.solace.messaging.config.SolaceConstants;
+import com.solace.messaging.receiver.InboundMessage;
+import com.solace.messaging.util.Converter;
+import com.solace.messaging.util.InteroperabilitySupport;
 
 public class SolaceInboundMetadata {
-    private final BytesXMLMessage msg;
 
-    public SolaceInboundMetadata(BytesXMLMessage msg) {
+    private final InboundMessage msg;
+
+    public SolaceInboundMetadata(InboundMessage msg) {
         this.msg = msg;
     }
 
     public boolean isRedelivered() {
-        return msg.getRedelivered();
+        return msg.isRedelivered();
     }
 
-    public boolean getMessageDiscardNotification() {
-        return msg.getDiscardIndication();
+    public InboundMessage.MessageDiscardNotification getMessageDiscardNotification() {
+        return msg.getMessageDiscardNotification();
     }
 
     public <T extends Serializable> T getAndConvertPayload(Converter.BytesToObject<T> bytesToObject, Class<T> aClass)
-            throws RuntimeException {
-        return getAndConvertPayload(bytesToObject, aClass, msg);
-        //        return msg.getAndConvertPayload(bytesToObject, aClass);
+            throws PubSubPlusClientException.IncompatibleMessageException {
+        return msg.getAndConvertPayload(bytesToObject, aClass);
     }
 
     public String getDestinationName() {
-        return msg.getDestination().getName();
+        return msg.getDestinationName();
     }
 
     public long getTimeStamp() {
-        return msg.getSenderTimestamp();
+        return msg.getTimeStamp();
     }
 
     public boolean isCached() {
-        return msg.isCacheMessage();
+        return msg.isCached();
     }
 
-    public ReplicationGroupMessageId getReplicationGroupMessageId() {
+    public InboundMessage.ReplicationGroupMessageId getReplicationGroupMessageId() {
         return msg.getReplicationGroupMessageId();
     }
 
-    //    public int getClassOfService() {
-    //        return msg.getClassOfService();
-    //    }
+    public int getClassOfService() {
+        return msg.getClassOfService();
+    }
 
     public Long getSenderTimestamp() {
         return msg.getSenderTimestamp();
@@ -57,19 +59,15 @@ public class SolaceInboundMetadata {
     }
 
     public boolean hasProperty(String s) {
-        return msg.getProperties().containsKey(s);
+        return msg.hasProperty(s);
     }
 
     public String getProperty(String s) {
-        try {
-            return msg.getProperties().getString(s);
-        } catch (SDTException e) {
-            throw new RuntimeException(e);
-        }
+        return msg.getProperty(s);
     }
 
     public String getPayloadAsString() {
-        return SolaceMessageUtils.getPayloadAsString(msg);
+        return msg.getPayloadAsString();
     }
 
     //    public Object getCorrelationKey() {
@@ -100,20 +98,20 @@ public class SolaceInboundMetadata {
         return msg.dump();
     }
 
-    //    public InteroperabilitySupport.RestInteroperabilitySupport getRestInteroperabilitySupport() {
-    //        return msg.getRestInteroperabilitySupport();
-    //    }
+    public InteroperabilitySupport.RestInteroperabilitySupport getRestInteroperabilitySupport() {
+        return msg.getRestInteroperabilitySupport();
+    }
 
-    public BytesXMLMessage getMessage() {
+    public InboundMessage getMessage() {
         return msg;
     }
 
     public String getPayload() {
-        return SolaceMessageUtils.getPayloadAsString(msg);
+        return msg.getPayloadAsString();
     }
 
     public byte[] getPayloadAsBytes() {
-        return SolaceMessageUtils.getPayloadAsBytes(msg);
+        return msg.getPayloadAsBytes();
     }
 
     public Object getKey() {
@@ -129,31 +127,11 @@ public class SolaceInboundMetadata {
     }
 
     public Map<String, String> getProperties() {
-        return SolaceMessageUtils.getPropertiesMap(msg.getProperties());
+        return msg.getProperties();
     }
 
     public String getPartitionKey() {
-        try {
-            return msg.getProperties().getString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY);
-        } catch (SDTException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public <T extends Serializable> T getAndConvertPayload(Converter.BytesToObject<T> converter, Class<T> outputType,
-            BytesXMLMessage solaceMessage) {
-        //        Validation.nullIllegal(converter, "Converter can't be null");
-        //        Validation.nullIllegal(outputType, "Output type parameter can't be null");
-        //        if (converter instanceof MessageToSDTMapConverter) {
-        //            MessageToSDTMapConverter sdtConverter = (MessageToSDTMapConverter)converter;
-        //            return (T)sdtConverter.get(solaceMessage);
-        //        } else
-        if (solaceMessage instanceof BytesMessage) {
-            byte[] b = ((BytesMessage) solaceMessage).getData();
-            return (T) converter.convert(b);
-        } else {
-            throw new RuntimeException("Incompatible message, provided converter can't be used");
-        }
+        return msg.getProperties().get(SolaceConstants.MessageUserPropertyConstants.QUEUE_PARTITION_KEY);
     }
 
 }

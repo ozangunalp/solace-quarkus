@@ -1,19 +1,25 @@
 package com.solace.quarkus.messaging.fault;
 
-import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
-import com.solacesystems.jcsmp.*;
+import java.util.Properties;
+
+import com.solace.messaging.config.SolaceProperties;
+import com.solace.messaging.publisher.OutboundMessage;
+import com.solace.messaging.publisher.OutboundMessageBuilder;
+import com.solace.messaging.receiver.InboundMessage;
 
 class OutboundErrorMessageMapper {
 
-    public BytesXMLMessage mapError(BytesXMLMessage inputMessage,
+    public OutboundMessage mapError(OutboundMessageBuilder messageBuilder, InboundMessage inputMessage,
             boolean dmqEligible, Long timeToLive) {
-        BytesXMLMessage outboundMessage = JCSMPFactory.onlyInstance().createMessage(BytesXMLMessage.class);
-        outboundMessage.setDMQEligible(dmqEligible);
+        Properties extendedMessageProperties = new Properties();
+
+        extendedMessageProperties.setProperty(SolaceProperties.MessageProperties.PERSISTENT_DMQ_ELIGIBLE,
+                Boolean.toString(dmqEligible));
+        messageBuilder.fromProperties(extendedMessageProperties);
         if (timeToLive != null) {
-            outboundMessage.setTimeToLive(timeToLive);
+            messageBuilder.withTimeToLive(timeToLive);
         }
-        outboundMessage.writeAttachment(SolaceMessageUtils.getPayloadAsBytes(inputMessage));
-        outboundMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
-        return outboundMessage;
+
+        return messageBuilder.build(inputMessage.getPayloadAsBytes());
     }
 }

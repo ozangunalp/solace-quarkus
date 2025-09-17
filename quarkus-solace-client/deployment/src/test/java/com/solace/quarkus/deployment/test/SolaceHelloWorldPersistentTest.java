@@ -3,7 +3,6 @@ package com.solace.quarkus.deployment.test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -16,7 +15,15 @@ import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import com.solacesystems.jcsmp.*;
+import com.solace.messaging.MessagingService;
+import com.solace.messaging.config.MissingResourcesCreationConfiguration;
+import com.solace.messaging.publisher.OutboundMessage;
+import com.solace.messaging.publisher.PersistentMessagePublisher;
+import com.solace.messaging.receiver.InboundMessage;
+import com.solace.messaging.receiver.PersistentMessageReceiver;
+import com.solace.messaging.resources.Queue;
+import com.solace.messaging.resources.Topic;
+import com.solace.messaging.resources.TopicSubscription;
 
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
@@ -44,7 +51,7 @@ public class SolaceHelloWorldPersistentTest {
     HelloWorldReceiver receiver;
 
     @Inject
-    JCSMPSession session;
+    MessagingService service;
 
     @Test
     public void hello() {
@@ -54,8 +61,8 @@ public class SolaceHelloWorldPersistentTest {
 
         await().until(() -> receiver.list().size() == 3);
 
-        for (BytesXMLMessage message : receiver.list()) {
-            assertThat(new String(message.getAttachmentByteBuffer().array(), StandardCharsets.UTF_8)).startsWith("Hello World");
+        for (InboundMessage message : receiver.list()) {
+            assertThat(message.getPayloadAsString()).startsWith("Hello World");
         }
     }
 
@@ -63,88 +70,55 @@ public class SolaceHelloWorldPersistentTest {
     public static class HelloWorldReceiver {
 
         @Inject
-        JCSMPSession session;
-        private FlowReceiver receiver;
-        private final List<BytesXMLMessage> list = new CopyOnWriteArrayList<>();
+        MessagingService messagingService;
+        private PersistentMessageReceiver receiver;
+        private final List<InboundMessage> list = new CopyOnWriteArrayList<>();
 
         public void init(@Observes StartupEvent ev) {
-            try {
-
-                EndpointProperties endpointProperties = new EndpointProperties();
-                endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
-                Queue queue = JCSMPFactory.onlyInstance().createQueue("my-queue");
-
-                ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
-                consumerFlowProperties.setEndpoint(queue);
-
-                session.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
-                receiver = session.createFlow(new XMLMessageListener() {
-                    @Override
-                    public void onReceive(BytesXMLMessage bytesXMLMessage) {
-                        list.add(bytesXMLMessage);
-                        bytesXMLMessage.ackMessage();
-                    }
-
-                    @Override
-                    public void onException(JCSMPException e) {
-
-                    }
-                }, consumerFlowProperties, endpointProperties);
-                session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic("hello/persistent"),
-                        JCSMPSession.WAIT_FOR_CONFIRM);
-                receiver.start();
-            } catch (JCSMPException e) {
-                throw new RuntimeException(e);
-            }
+            receiver = messagingService.createPersistentMessageReceiverBuilder()
+                    .withSubscriptions(TopicSubscription.of("hello/persistent"))
+                    .withMissingResourcesCreationStrategy(
+                            MissingResourcesCreationConfiguration.MissingResourcesCreationStrategy.CREATE_ON_START)
+                    .build(Queue.durableExclusiveQueue("my-queue")).start();
+            receiver.receiveAsync(m -> {
+                receiver.ack(m);
+                list.add(m);
+            });
         }
 
-        public List<BytesXMLMessage> list() {
+        public List<InboundMessage> list() {
             return list;
         }
 
         public void stop(@Observes ShutdownEvent ev) {
-            receiver.close();
+            receiver.terminate(100);
         }
     }
 
     @ApplicationScoped
     public static class HelloWorldPublisher {
         @Inject
-        JCSMPSession session;
-        private XMLMessageProducer publisher;
+        MessagingService messagingService;
+        private PersistentMessagePublisher publisher;
 
         public void init(@Observes StartupEvent ev) {
-            try {
-                publisher = session.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
-                    @Override
-                    public void responseReceivedEx(Object o) {
-
-                    }
-
-                    @Override
-                    public void handleErrorEx(Object o, JCSMPException e, long l) {
-
-                    }
-                });
-            } catch (JCSMPException e) {
-                throw new RuntimeException(e);
-            }
+            publisher = messagingService.createPersistentMessagePublisherBuilder()
+                    .onBackPressureWait(1)
+                    .build().start();
         }
 
         public void send(String message) {
             String topicString = "hello/persistent";
-            BytesXMLMessage bytesXMLMessage = JCSMPFactory.onlyInstance().createMessage(BytesXMLMessage.class);
-            bytesXMLMessage.writeAttachment(message.getBytes(StandardCharsets.UTF_8));
-
+            OutboundMessage om = messagingService.messageBuilder().build(message);
             try {
-                publisher.send(bytesXMLMessage, JCSMPFactory.onlyInstance().createTopic(topicString));
-            } catch (JCSMPException e) {
+                publisher.publishAwaitAcknowledgement(om, Topic.of(topicString), 10000L);
+            } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
         }
 
         public void stop(@Observes ShutdownEvent ev) {
-            publisher.close();
+            publisher.terminate(100);
         }
     }
 }

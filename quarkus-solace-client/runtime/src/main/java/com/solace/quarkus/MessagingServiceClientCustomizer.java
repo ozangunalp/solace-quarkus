@@ -1,6 +1,6 @@
 package com.solace.quarkus;
 
-import com.solacesystems.jcsmp.JCSMPProperties;
+import com.solace.messaging.MessagingServiceClientBuilder;
 
 /**
  * Interface implemented by CDI beans that want to customize the Solace client configuration.
@@ -22,5 +22,5 @@ public interface MessagingServiceClientCustomizer {
      * @param builder the builder to customize the Solace client instance
      * @return the builder to use to create the Solace client instance
      */
-    JCSMPProperties customize(JCSMPProperties builder);
+    MessagingServiceClientBuilder customize(MessagingServiceClientBuilder builder);
 }

@@ -5,14 +5,15 @@ import java.util.concurrent.CompletionStage;
 
 import org.eclipse.microprofile.reactive.messaging.Metadata;
 
+import com.solace.messaging.MessagingService;
+import com.solace.messaging.config.MessageAcknowledgementConfiguration;
+import com.solace.messaging.receiver.AcknowledgementSupport;
 import com.solace.quarkus.messaging.i18n.SolaceLogging;
 import com.solace.quarkus.messaging.incoming.SolaceInboundMessage;
-import com.solacesystems.jcsmp.JCSMPException;
-import com.solacesystems.jcsmp.JCSMPSession;
-import com.solacesystems.jcsmp.XMLMessage;
 
 public class SolaceErrorTopic implements SolaceFailureHandler {
     private final String channel;
+    private final AcknowledgementSupport ackSupport;
 
     private final SolaceErrorTopicPublisherHandler solaceErrorTopicPublisherHandler;
     private final long maxDeliveryAttempts;
@@ -21,12 +22,13 @@ public class SolaceErrorTopic implements SolaceFailureHandler {
     private final Long timeToLive;
 
     public SolaceErrorTopic(String channel, String errorTopic, boolean dmqEligible, Long timeToLive, long maxDeliveryAttempts,
-            JCSMPSession solace) {
+            AcknowledgementSupport ackSupport, MessagingService solace) {
         this.channel = channel;
         this.errorTopic = errorTopic;
         this.dmqEligible = dmqEligible;
         this.timeToLive = timeToLive;
         this.maxDeliveryAttempts = maxDeliveryAttempts;
+        this.ackSupport = ackSupport;
         this.solaceErrorTopicPublisherHandler = new SolaceErrorTopicPublisherHandler(solace);
     }
 
@@ -37,14 +39,11 @@ public class SolaceErrorTopic implements SolaceFailureHandler {
                 .atMost(maxDeliveryAttempts)
                 .onItem().invoke(() -> {
                     SolaceLogging.log.messageSettled(channel,
-                            XMLMessage.Outcome.ACCEPTED.toString().toLowerCase(),
+                            MessageAcknowledgementConfiguration.Outcome.ACCEPTED.toString().toLowerCase(),
                             "Message is published to error topic and acknowledged on queue.");
-                    try {
-                        msg.getMessage().settle(XMLMessage.Outcome.ACCEPTED);
-                    } catch (JCSMPException e) {
-                        throw new RuntimeException(e);
+                    if (ackSupport != null) {
+                        ackSupport.settle(msg.getMessage(), MessageAcknowledgementConfiguration.Outcome.ACCEPTED);
                     }
-
                 })
                 .replaceWithVoid()
                 .onFailure().invoke(t -> SolaceLogging.log.unsuccessfulToTopic(errorTopic, channel, t))

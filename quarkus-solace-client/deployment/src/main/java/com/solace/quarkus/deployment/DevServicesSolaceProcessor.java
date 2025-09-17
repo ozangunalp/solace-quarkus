@@ -163,8 +163,8 @@ public class DevServicesSolaceProcessor {
             String host = container.getHost() + ":" + container.getPort();
             Map<String, String> config = Map.of("quarkus.solace.host", host,
                     "quarkus.solace.vpn", "default",
-                    "quarkus.solace.username", "admin",
-                    "quarkus.solace.password", "admin");
+                    "quarkus.solace.authentication.basic.username", "admin",
+                    "quarkus.solace.authentication.basic.password", "admin");
             return new RunningDevService("solace", container.getContainerId(),
                     container::close, config);
         };
@@ -174,8 +174,8 @@ public class DevServicesSolaceProcessor {
                     String host = containerAddress.getUrl();
                     Map<String, String> config = Map.of("quarkus.solace.host", host,
                             "quarkus.solace.vpn", "default",
-                            "quarkus.solace.username", "admin",
-                            "quarkus.solace.password", "admin");
+                            "quarkus.solace.authentication.basic.username", "admin",
+                            "quarkus.solace.authentication.basic.password", "admin");
                     return new RunningDevService("solace", containerAddress.getId(),
                             null, config);
                 })

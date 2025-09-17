@@ -1,5 +1,7 @@
 package com.solace.quarkus.runtime;
 
+import static com.solace.messaging.config.SolaceProperties.AuthenticationProperties.SCHEME_OAUTH2_ACCESS_TOKEN;
+
 import java.time.Duration;
 import java.util.Optional;
 
@@ -8,9 +10,7 @@ import jakarta.inject.Inject;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import com.solacesystems.jcsmp.JCSMPException;
-import com.solacesystems.jcsmp.JCSMPProperties;
-import com.solacesystems.jcsmp.JCSMPSession;
+import com.solace.messaging.MessagingService;
 
 import io.quarkus.logging.Log;
 import io.quarkus.oidc.client.OidcClient;
@@ -43,7 +43,7 @@ public class OidcProvider {
         return firstToken;
     }
 
-    void init(JCSMPSession service) {
+    void init(MessagingService service) {
         OidcClient client = getClient();
         Multi.createFrom().ticks().every(duration)
                 .onOverflow().drop()
@@ -65,12 +65,8 @@ public class OidcProvider {
                     return Uni.createFrom().voidItem();
                 })
                 .subscribe().with(x -> {
-                    if (!service.isClosed()) {
-                        try {
-                            service.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN, lastToken.getAccessToken());
-                        } catch (JCSMPException e) {
-                            throw new RuntimeException(e);
-                        }
+                    if (service.isConnected()) {
+                        service.updateProperty(SCHEME_OAUTH2_ACCESS_TOKEN, lastToken.getAccessToken());
                         Log.info("Updated Solace Session with latest access token");
                     } else {
                         Log.info("Solace service is not connected, cannot update access token without valid connection");

@@ -19,11 +19,11 @@ import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.reactive.messaging.Message;
 import org.eclipse.microprofile.reactive.messaging.spi.Connector;
 
+import com.solace.messaging.MessagingService;
 import com.solace.quarkus.messaging.incoming.SolaceDirectMessageIncomingChannel;
 import com.solace.quarkus.messaging.incoming.SolaceIncomingChannel;
 import com.solace.quarkus.messaging.outgoing.SolaceDirectMessageOutgoingChannel;
 import com.solace.quarkus.messaging.outgoing.SolaceOutgoingChannel;
-import com.solacesystems.jcsmp.JCSMPSession;
 
 import io.opentelemetry.api.OpenTelemetry;
 import io.smallrye.reactive.messaging.annotations.ConnectorAttribute;
@@ -77,7 +77,7 @@ public class SolaceConnector implements InboundConnector, OutboundConnector, Hea
     ExecutionHolder executionHolder;
 
     @Inject
-    JCSMPSession solace;
+    MessagingService solace;
 
     @Inject
     Instance<OpenTelemetry> openTelemetryInstance;
@@ -106,8 +106,7 @@ public class SolaceConnector implements InboundConnector, OutboundConnector, Hea
     public Flow.Publisher<? extends Message<?>> getPublisher(Config config) {
         var ic = new SolaceConnectorIncomingConfiguration(config);
         if (ic.getClientType().equals("direct")) {
-            SolaceDirectMessageIncomingChannel channel = null;
-            channel = new SolaceDirectMessageIncomingChannel(vertx, openTelemetryInstance,
+            SolaceDirectMessageIncomingChannel channel = new SolaceDirectMessageIncomingChannel(vertx, openTelemetryInstance,
                     ic, solace);
             directMessageIncomingChannels.add(channel);
             return channel.getStream();

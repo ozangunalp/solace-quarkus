@@ -1,43 +1,58 @@
 package com.solace.quarkus.messaging.fault;
 
-import com.solace.quarkus.messaging.PublishReceipt;
+import com.solace.messaging.MessagingService;
+import com.solace.messaging.PubSubPlusClientException;
+import com.solace.messaging.publisher.OutboundMessage;
+import com.solace.messaging.publisher.PersistentMessagePublisher;
+import com.solace.messaging.publisher.PersistentMessagePublisher.PublishReceipt;
+import com.solace.messaging.resources.Topic;
 import com.solace.quarkus.messaging.i18n.SolaceLogging;
 import com.solace.quarkus.messaging.incoming.SolaceInboundMessage;
-import com.solacesystems.jcsmp.*;
 
 import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.subscription.UniEmitter;
 
-class SolaceErrorTopicPublisherHandler {
-    private final XMLMessageProducer publisher;
+class SolaceErrorTopicPublisherHandler implements PersistentMessagePublisher.MessagePublishReceiptListener {
+
+    private final MessagingService solace;
+    private final PersistentMessagePublisher publisher;
     private final OutboundErrorMessageMapper outboundErrorMessageMapper;
 
-    public SolaceErrorTopicPublisherHandler(JCSMPSession solace) {
-        try {
-            publisher = solace.createProducer(new ProducerFlowProperties(), new PublishReceipt());
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
+    public SolaceErrorTopicPublisherHandler(MessagingService solace) {
+        this.solace = solace;
+
+        publisher = solace.createPersistentMessagePublisherBuilder().build();
+        publisher.setMessagePublishReceiptListener(this);
+        publisher.start();
         outboundErrorMessageMapper = new OutboundErrorMessageMapper();
     }
 
-    public Uni<Object> handle(SolaceInboundMessage<?> message,
+    public Uni<PublishReceipt> handle(SolaceInboundMessage<?> message,
             String errorTopic,
             boolean dmqEligible, Long timeToLive) {
-        BytesXMLMessage outboundMessage = outboundErrorMessageMapper.mapError(
+        OutboundMessage outboundMessage = outboundErrorMessageMapper.mapError(this.solace.messageBuilder(),
                 message.getMessage(),
                 dmqEligible, timeToLive);
         //        }
-        return Uni.createFrom().<Object> emitter(e -> {
+        return Uni.createFrom().<PublishReceipt> emitter(e -> {
             try {
                 // always wait for error message publish receipt to ensure it is successfully spooled on broker.
-                outboundMessage.setCorrelationKey(e);
-                publisher.send(outboundMessage, JCSMPFactory.onlyInstance().createTopic(errorTopic));
-            } catch (Exception t) {
+                publisher.publish(outboundMessage, Topic.of(errorTopic), e);
+            } catch (Throwable t) {
                 e.fail(t);
             }
-        }).onItem().invoke(publisher::close).onFailure().invoke(t -> {
-            SolaceLogging.log.publishException(errorTopic, t);
-            publisher.close();
-        });
+        }).onFailure().invoke(t -> SolaceLogging.log.publishException(errorTopic, t));
+    }
+
+    @Override
+    public void onPublishReceipt(PublishReceipt publishReceipt) {
+        UniEmitter<PublishReceipt> uniEmitter = (UniEmitter<PublishReceipt>) publishReceipt
+                .getUserContext();
+        PubSubPlusClientException exception = publishReceipt.getException();
+        if (exception != null) {
+            uniEmitter.fail(exception);
+        } else {
+            uniEmitter.complete(publishReceipt);
+        }
     }
 }

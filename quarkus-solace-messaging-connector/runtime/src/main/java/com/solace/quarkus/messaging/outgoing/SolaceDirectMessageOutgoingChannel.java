@@ -1,8 +1,6 @@
 package com.solace.quarkus.messaging.outgoing;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -13,13 +11,17 @@ import jakarta.enterprise.inject.Instance;
 
 import org.eclipse.microprofile.reactive.messaging.Message;
 
-import com.solace.quarkus.messaging.PublishReceipt;
+import com.solace.messaging.DirectMessagePublisherBuilder;
+import com.solace.messaging.MessagingService;
+import com.solace.messaging.PubSubPlusClientException;
+import com.solace.messaging.config.SolaceConstants;
+import com.solace.messaging.config.SolaceProperties;
+import com.solace.messaging.publisher.*;
+import com.solace.messaging.resources.Topic;
 import com.solace.quarkus.messaging.SolaceConnectorOutgoingConfiguration;
-import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
 import com.solace.quarkus.messaging.i18n.SolaceLogging;
 import com.solace.quarkus.messaging.tracing.SolaceOpenTelemetryInstrumenter;
 import com.solace.quarkus.messaging.tracing.SolaceTrace;
-import com.solacesystems.jcsmp.*;
 
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.opentelemetry.api.OpenTelemetry;
@@ -29,9 +31,10 @@ import io.smallrye.reactive.messaging.providers.helpers.MultiUtils;
 import io.vertx.core.json.Json;
 import io.vertx.mutiny.core.Vertx;
 
-public class SolaceDirectMessageOutgoingChannel {
+public class SolaceDirectMessageOutgoingChannel
+        implements PublisherHealthCheck.PublisherReadinessListener {
 
-    private final XMLMessageProducer publisher;
+    private final DirectMessagePublisher publisher;
     private final String channel;
     private final Flow.Subscriber<? extends Message<?>> subscriber;
     private final Topic topic;
@@ -41,36 +44,32 @@ public class SolaceDirectMessageOutgoingChannel {
     private final AtomicBoolean alive = new AtomicBoolean(true);
     private final List<Throwable> failures = new ArrayList<>();
     private final SolaceOpenTelemetryInstrumenter solaceOpenTelemetryInstrumenter;
-    private final JCSMPSession solace;
+    private final MessagingService solace;
     private volatile boolean isPublisherReady = true;
     // Assuming we won't ever exceed the limit of an unsigned long...
     private final OutgoingMessagesUnsignedCounterBarrier publishedMessagesTracker = new OutgoingMessagesUnsignedCounterBarrier();
 
     public SolaceDirectMessageOutgoingChannel(Vertx vertx, Instance<OpenTelemetry> openTelemetryInstance,
-            SolaceConnectorOutgoingConfiguration oc, JCSMPSession solace) {
+            SolaceConnectorOutgoingConfiguration oc, MessagingService solace) {
         this.solace = solace;
         this.channel = oc.getChannel();
-        //        DirectMessagePublisherBuilder builder = solace.createDirectMessagePublisherBuilder();
-        //        switch (oc.getProducerBackPressureStrategy()) {
-        //            case "wait":
-        //                builder.onBackPressureWait(oc.getProducerBackPressureBufferCapacity());
-        //                break;
-        //            case "reject":
-        //                builder.onBackPressureReject(oc.getProducerBackPressureBufferCapacity());
-        //                break;
-        //            default:
-        //                builder.onBackPressureElastic();
-        //                break;
-        //        }
+        DirectMessagePublisherBuilder builder = solace.createDirectMessagePublisherBuilder();
+        switch (oc.getProducerBackPressureStrategy()) {
+            case "wait":
+                builder.onBackPressureWait(oc.getProducerBackPressureBufferCapacity());
+                break;
+            case "reject":
+                builder.onBackPressureReject(oc.getProducerBackPressureBufferCapacity());
+                break;
+            default:
+                builder.onBackPressureElastic();
+                break;
+        }
         this.gracefulShutdown = oc.getClientGracefulShutdown();
         this.gracefulShutdownWaitTimeout = oc.getClientGracefulShutdownWaitTimeout();
-        try {
-            this.publisher = this.solace.getMessageProducer(new PublishReceipt());
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
+        this.publisher = builder.build();
         boolean lazyStart = oc.getClientLazyStart();
-        this.topic = JCSMPFactory.onlyInstance().createTopic(oc.getProducerTopic().orElse(this.channel));
+        this.topic = Topic.of(oc.getProducerTopic().orElse(this.channel));
         if (oc.getClientTracingEnabled()) {
             solaceOpenTelemetryInstrumenter = SolaceOpenTelemetryInstrumenter.createForOutgoing(openTelemetryInstance);
         } else {
@@ -80,23 +79,22 @@ public class SolaceDirectMessageOutgoingChannel {
                 m -> sendMessage(solace, m, oc.getClientTracingEnabled()).onFailure()
                         .invoke(this::reportFailure));
         this.subscriber = MultiUtils.via(processor, multi -> multi.plug(
-                m -> lazyStart ? m.onSubscription().call(() -> Uni.createFrom().voidItem()) : m));
+                m -> lazyStart ? m.onSubscription().call(() -> Uni.createFrom().completionStage(publisher.startAsync())) : m));
         if (!lazyStart) {
-            //            this.publisher.start();
+            this.publisher.start();
         }
 
-        // @TODO - Check if available in JCSMP
-        //        this.publisher.setPublisherReadinessListener(() -> isPublisherReady = true);
-        //        this.publisher.setPublishFailureListener(failedPublishEvent -> {
-        //            SolaceLogging.log.error("Failed to publish direct message");
-        //            reportFailure(failedPublishEvent.getException());
-        //        });
+        this.publisher.setPublisherReadinessListener(() -> isPublisherReady = true);
+        this.publisher.setPublishFailureListener(failedPublishEvent -> {
+            SolaceLogging.log.error("Failed to publish direct message");
+            reportFailure(failedPublishEvent.getException());
+        });
     }
 
-    private Uni<Void> sendMessage(JCSMPSession solace, Message<?> m, boolean isTracingEnabled) {
+    private Uni<Void> sendMessage(MessagingService solace, Message<?> m, boolean isTracingEnabled) {
 
         // TODO - Use isPublisherReady to check if publisher is in ready state before publishing. This is required when back-pressure is set to reject. We need to block this call till isPublisherReady is true
-        return publishMessage(publisher, m, isTracingEnabled)
+        return publishMessage(publisher, m, solace.messageBuilder(), isTracingEnabled)
                 .onItem().transformToUni(receipt -> {
                     alive.set(true);
                     return Uni.createFrom().completionStage(m.getAck());
@@ -116,125 +114,103 @@ public class SolaceDirectMessageOutgoingChannel {
         failures.add(throwable);
     }
 
-    private Uni<Object> publishMessage(XMLMessageProducer publisher, Message<?> m, boolean isTracingEnabled) {
+    private Uni<Object> publishMessage(DirectMessagePublisher publisher, Message<?> m,
+            OutboundMessageBuilder msgBuilder, boolean isTracingEnabled) {
         publishedMessagesTracker.increment();
         AtomicReference<Topic> topic = new AtomicReference<>(this.topic);
-        BytesXMLMessage outboundMessage;
-        Object payload = m.getPayload();
-        if (payload instanceof BytesXMLMessage) {
-            outboundMessage = JCSMPFactory.onlyInstance().createMessage((BytesXMLMessage) payload);
-        } else {
-            outboundMessage = JCSMPFactory.onlyInstance().createBytesXMLMessage();
-        }
-        SDTMap map = JCSMPFactory.onlyInstance().createMap();
+        OutboundMessage outboundMessage;
         m.getMetadata(SolaceOutboundMetadata.class).ifPresent(metadata -> {
-            //            if (metadata.getHttpContentHeaders() != null && !metadata.getHttpContentHeaders().isEmpty()) {
-            //                metadata.getHttpContentHeaders().forEach(msgBuilder::withHTTPContentHeader);
-            //            }
+            if (metadata.getHttpContentHeaders() != null && !metadata.getHttpContentHeaders().isEmpty()) {
+                metadata.getHttpContentHeaders().forEach(msgBuilder::withHTTPContentHeader);
+            }
             if (metadata.getProperties() != null && !metadata.getProperties().isEmpty()) {
-                //                metadata.getProperties().forEach(msgBuilder::withProperty);
-                for (String key : metadata.getProperties().keySet()) {
-                    try {
-                        map.putString(key, metadata.getProperties().get(key));
-                    } catch (SDTException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
+                metadata.getProperties().forEach(msgBuilder::withProperty);
             }
             if (metadata.getExpiration() != null) {
-                outboundMessage.setExpiration(metadata.getExpiration());
+                msgBuilder.withExpiration(metadata.getExpiration());
             }
             if (metadata.getPriority() != null) {
-                outboundMessage.setPriority(metadata.getPriority());
+                msgBuilder.withPriority(metadata.getPriority());
             }
             if (metadata.getSenderId() != null) {
-                outboundMessage.setSenderId(metadata.getSenderId());
+                msgBuilder.withSenderId(metadata.getSenderId());
             }
             if (metadata.getApplicationMessageType() != null) {
-                outboundMessage.setApplicationMessageType(metadata.getApplicationMessageType());
+                msgBuilder.withApplicationMessageType(metadata.getApplicationMessageType());
             }
             if (metadata.getTimeToLive() != null) {
-                outboundMessage.setTimeToLive(metadata.getTimeToLive());
+                msgBuilder.withTimeToLive(metadata.getTimeToLive());
             }
             if (metadata.getApplicationMessageId() != null) {
-                outboundMessage.setApplicationMessageId(metadata.getApplicationMessageId());
+                msgBuilder.withApplicationMessageId(metadata.getApplicationMessageId());
             }
             if (metadata.getClassOfService() != null) {
-                outboundMessage.setCos(Arrays.stream(User_Cos.values()).filter(co -> co.value() == metadata.getClassOfService())
-                        .findFirst().orElse(null));
+                msgBuilder.withClassOfService(metadata.getClassOfService());
             }
             if (metadata.getPartitionKey() != null) {
-                try {
-                    map.putString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY,
-                            metadata.getPartitionKey());
-                } catch (SDTException e) {
-                    throw new RuntimeException(e);
-                }
+                msgBuilder.withProperty(SolaceConstants.MessageUserPropertyConstants.QUEUE_PARTITION_KEY,
+                        metadata.getPartitionKey());
             }
             if (metadata.getCorrelationId() != null) {
-                outboundMessage.setCorrelationId(metadata.getCorrelationId());
+                msgBuilder.withProperty(SolaceProperties.MessageProperties.CORRELATION_ID, metadata.getCorrelationId());
             }
 
             if (metadata.getDynamicDestination() != null) {
-                topic.set(JCSMPFactory.onlyInstance().createTopic(metadata.getDynamicDestination()));
+                topic.set(Topic.of(metadata.getDynamicDestination()));
             }
         });
-        if (!map.isEmpty()) {
-            outboundMessage.setProperties(map);
-        }
 
-        if (payload instanceof String) {
-            //            outboundMessage.setHTTPContentEncoding(HttpHeaderValues.TEXT_PLAIN.toString());
-            outboundMessage.setHTTPContentType(HttpHeaderValues.TEXT_PLAIN.toString());
-            outboundMessage.writeAttachment(((String) payload).getBytes(StandardCharsets.UTF_8));
+        Object payload = m.getPayload();
+        if (payload instanceof OutboundMessage) {
+            outboundMessage = (OutboundMessage) payload;
+        } else if (payload instanceof String) {
+            outboundMessage = msgBuilder
+                    .withHTTPContentHeader(HttpHeaderValues.TEXT_PLAIN.toString(), "")
+                    .build((String) payload);
         } else if (payload instanceof byte[]) {
-            outboundMessage.writeAttachment((byte[]) payload);
-        } else if (!(payload instanceof BytesXMLMessage)) {
-            outboundMessage.setHTTPContentType(HttpHeaderValues.APPLICATION_JSON.toString());
-            //            outboundMessage.setHTTPContentEncoding(HttpHeaderValues.APPLICATION_JSON.toString());
-            outboundMessage.writeAttachment(Json.encode(payload).getBytes(StandardCharsets.UTF_8));
+            outboundMessage = msgBuilder.build((byte[]) payload);
+        } else {
+            outboundMessage = msgBuilder
+                    .withHTTPContentHeader(HttpHeaderValues.APPLICATION_JSON.toString(), "")
+                    .build(Json.encode(payload));
         }
 
         if (isTracingEnabled) {
-            SolaceTrace solaceTrace = null;
-            try {
-                solaceTrace = new SolaceTrace.Builder()
-                        .withDestinationKind("topic")
-                        .withTopic(topic.get().getName())
-                        .withMessageID(outboundMessage.getApplicationMessageId())
-                        .withCorrelationID(outboundMessage.getCorrelationId())
-                        .withPartitionKey(outboundMessage.getProperties() != null ? (outboundMessage.getProperties()
-                                .containsKey(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
-                                        ? outboundMessage.getProperties()
-                                                .getString(
-                                                        XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
-                                        : null)
-                                : null)
-                        .withPayloadSize((long) SolaceMessageUtils.getPayloadAsBytes(outboundMessage).length)
-                        .withProperties(SolaceMessageUtils.getPropertiesMap(outboundMessage.getProperties())).build();
-            } catch (SDTException e) {
-                throw new RuntimeException(e);
-            }
+            SolaceTrace solaceTrace = new SolaceTrace.Builder()
+                    .withDestinationKind("topic")
+                    .withTopic(topic.get().getName())
+                    .withMessageID(outboundMessage.getApplicationMessageId())
+                    .withCorrelationID(outboundMessage.getCorrelationId())
+                    .withPartitionKey(
+                            outboundMessage
+                                    .hasProperty(SolaceConstants.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
+                                            ? outboundMessage
+                                                    .getProperty(
+                                                            SolaceConstants.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
+                                            : null)
+                    .withPayloadSize(Long.valueOf(outboundMessage.getPayloadAsBytes().length))
+                    .withProperties(outboundMessage.getProperties()).build();
             solaceOpenTelemetryInstrumenter.traceOutgoing(m, solaceTrace);
         }
 
         return Uni.createFrom().<Object> emitter(e -> {
+            boolean exitExceptionally = false;
             try {
                 if (isPublisherReady) {
-                    publisher.send(outboundMessage, topic.get());
+                    publisher.publish(outboundMessage, topic.get());
                     publishedMessagesTracker.decrement();
-                    e.complete("SUCCESS");
-                    /**
-                     * @TODO - Direct messages will only receive exception callback. Hence need to find a way
-                     *       to identify error before calling success. Currently any exceptions when publishing direct messages
-                     *       is ignored.
-                     */
+                    e.complete(null);
                 }
-            } catch (Exception exception) {
+            } catch (PubSubPlusClientException.PublisherOverflowException publisherOverflowException) {
                 isPublisherReady = false;
-                e.fail(exception);
+                exitExceptionally = true;
+                e.fail(publisherOverflowException);
             } catch (Throwable t) {
                 e.fail(t);
+            } finally {
+                if (exitExceptionally) {
+                    publisher.notifyWhenReady();
+                }
             }
         }).invoke(() -> SolaceLogging.log.successfullyToTopic(channel, topic.get().getName()));
     }
@@ -264,15 +240,15 @@ public class SolaceDirectMessageOutgoingChannel {
             processor.cancel();
         }
 
-        publisher.close();
+        publisher.terminate(5000);
     }
 
     public void isStarted(HealthReport.HealthReportBuilder builder) {
-        builder.add(channel, !solace.isClosed());
+        builder.add(channel, solace.isConnected());
     }
 
     public void isReady(HealthReport.HealthReportBuilder builder) {
-        builder.add(channel, !solace.isClosed() && this.publisher != null && !this.publisher.isClosed());
+        builder.add(channel, solace.isConnected() && this.publisher != null && this.publisher.isReady());
     }
 
     public void isAlive(HealthReport.HealthReportBuilder builder) {
@@ -281,10 +257,15 @@ public class SolaceDirectMessageOutgoingChannel {
             synchronized (this) {
                 reportedFailures = new ArrayList<>(failures);
             }
-            builder.add(channel, !solace.isClosed() && alive.get(),
+            builder.add(channel, solace.isConnected() && alive.get(),
                     reportedFailures.stream().map(Throwable::getMessage).collect(Collectors.joining()));
         } else {
-            builder.add(channel, !solace.isClosed() && alive.get());
+            builder.add(channel, solace.isConnected() && alive.get());
         }
+    }
+
+    @Override
+    public void ready() {
+        isPublisherReady = true;
     }
 }

@@ -13,9 +13,10 @@ import org.eclipse.microprofile.reactive.messaging.Message;
 import org.eclipse.microprofile.reactive.messaging.Outgoing;
 import org.junit.jupiter.api.Test;
 
+import com.solace.messaging.receiver.PersistentMessageReceiver;
+import com.solace.messaging.resources.Queue;
+import com.solace.messaging.resources.TopicSubscription;
 import com.solace.quarkus.messaging.base.WeldTestBase;
-import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
-import com.solacesystems.jcsmp.*;
 
 import io.smallrye.mutiny.Multi;
 import io.smallrye.reactive.messaging.health.HealthReport;
@@ -30,30 +31,12 @@ public class SolacePublisherHealthTest extends WeldTestBase {
 
         List<String> expected = new CopyOnWriteArrayList<>();
 
-        try {
-            // Start listening first
-            EndpointProperties endpointProperties = new EndpointProperties();
-            endpointProperties.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
-            Queue queue = session.createTemporaryQueue();
-
-            ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
-            consumerFlowProperties.setEndpoint(queue);
-            FlowReceiver receiver = session.createFlow(new XMLMessageListener() {
-                @Override
-                public void onReceive(BytesXMLMessage bytesXMLMessage) {
-                    expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
-                }
-
-                @Override
-                public void onException(JCSMPException e) {
-
-                }
-            }, consumerFlowProperties, endpointProperties);
-            session.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic(topic), JCSMPSession.WAIT_FOR_CONFIRM);
-            receiver.start();
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
+        // Start listening first
+        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
+                .withSubscriptions(TopicSubscription.of(topic))
+                .build(Queue.nonDurableExclusiveQueue());
+        receiver.receiveAsync(inboundMessage -> expected.add(inboundMessage.getPayloadAsString()));
+        receiver.start();
 
         // Run app that publish messages
         MyApp app = runApplication(config, MyApp.class);
@@ -81,24 +64,11 @@ public class SolacePublisherHealthTest extends WeldTestBase {
         List<String> expected = new CopyOnWriteArrayList<>();
 
         // Start listening first
-        try {
-            // Start listening first
-            XMLMessageConsumer receiver = session.getMessageConsumer(new XMLMessageListener() {
-                @Override
-                public void onReceive(BytesXMLMessage bytesXMLMessage) {
-                    expected.add(SolaceMessageUtils.getPayloadAsString(bytesXMLMessage));
-                }
-
-                @Override
-                public void onException(JCSMPException e) {
-
-                }
-            });
-            session.addSubscription(JCSMPFactory.onlyInstance().createTopic("publish/deny"));
-            receiver.start();
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
-        }
+        PersistentMessageReceiver receiver = messagingService.createPersistentMessageReceiverBuilder()
+                .withSubscriptions(TopicSubscription.of("publish/deny"))
+                .build(Queue.nonDurableExclusiveQueue());
+        receiver.receiveAsync(inboundMessage -> expected.add(inboundMessage.getPayloadAsString()));
+        receiver.start();
 
         // Run app that publish messages
         MyApp app = runApplication(config, MyApp.class);

@@ -15,152 +15,135 @@ import jakarta.enterprise.inject.Instance;
 
 import org.eclipse.microprofile.reactive.messaging.Message;
 
+import com.solace.messaging.DirectMessageReceiverBuilder;
+import com.solace.messaging.MessagingService;
+import com.solace.messaging.config.*;
+import com.solace.messaging.receiver.DirectMessageReceiver;
+import com.solace.messaging.receiver.InboundMessage;
+import com.solace.messaging.resources.TopicSubscription;
 import com.solace.quarkus.messaging.SolaceConnectorIncomingConfiguration;
-import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
 import com.solace.quarkus.messaging.fault.*;
 import com.solace.quarkus.messaging.i18n.SolaceLogging;
 import com.solace.quarkus.messaging.tracing.SolaceOpenTelemetryInstrumenter;
 import com.solace.quarkus.messaging.tracing.SolaceTrace;
-import com.solacesystems.jcsmp.*;
 
 import io.opentelemetry.api.OpenTelemetry;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
-import io.smallrye.mutiny.unchecked.Unchecked;
 import io.smallrye.reactive.messaging.health.HealthReport;
 import io.vertx.core.impl.VertxInternal;
 import io.vertx.mutiny.core.Context;
 import io.vertx.mutiny.core.Vertx;
 
-public class SolaceDirectMessageIncomingChannel {
+public class SolaceDirectMessageIncomingChannel
+        implements ReceiverActivationPassivationConfiguration.ReceiverStateChangeListener {
     private final String channel;
     private final Context context;
     private final SolaceAckHandler ackHandler;
     private final SolaceFailureHandler failureHandler;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final AtomicBoolean alive = new AtomicBoolean(true);
-    private final XMLMessageConsumer receiver;
+    private final DirectMessageReceiver receiver;
     private final Flow.Publisher<? extends Message<?>> stream;
     private final ExecutorService pollerThread;
     private final boolean gracefulShutdown;
     private final long gracefulShutdownWaitTimeout;
     private final List<Throwable> failures = new ArrayList<>();
     private final SolaceOpenTelemetryInstrumenter solaceOpenTelemetryInstrumenter;
-    private final JCSMPSession solace;
+    private final MessagingService solace;
 
     // Assuming we won't ever exceed the limit of an unsigned long...
     private final IncomingMessagesUnsignedCounterBarrier unacknowledgedMessageTracker = new IncomingMessagesUnsignedCounterBarrier();
 
     public SolaceDirectMessageIncomingChannel(Vertx vertx, Instance<OpenTelemetry> openTelemetryInstance,
-            SolaceConnectorIncomingConfiguration ic, JCSMPSession solace) {
+            SolaceConnectorIncomingConfiguration ic, MessagingService solace) {
         this.solace = solace;
         this.channel = ic.getChannel();
         this.context = Context.newInstance(((VertxInternal) vertx.getDelegate()).createEventLoopContext());
         this.gracefulShutdown = ic.getClientGracefulShutdown();
         this.gracefulShutdownWaitTimeout = ic.getClientGracefulShutdownWaitTimeout();
-        try {
-            receiver = solace.getMessageConsumer((XMLMessageListener) null);
-            String subscriptions = ic.getConsumerSubscriptions().orElse(this.channel);
+        MessageAcknowledgementConfiguration.Outcome[] outcomes = new MessageAcknowledgementConfiguration.Outcome[] {
+                MessageAcknowledgementConfiguration.Outcome.ACCEPTED };
 
-            String[] subscriptionsArray = subscriptions.split(",");
-            List<Uni<Void>> subscriptionUnis = new ArrayList<>();
-            for (String subscription : subscriptionsArray) {
-                Uni<Void> subUni = subscribeToTopic(solace, subscription).onFailure().invoke(this::reportFailure);
+        DirectMessageReceiverBuilder builder = solace.createDirectMessageReceiverBuilder();
+        String subscriptions = ic.getConsumerSubscriptions().orElse(this.channel);
+        builder.withSubscriptions(Arrays.stream(subscriptions.split(","))
+                .map(TopicSubscription::of)
+                .toArray(TopicSubscription[]::new));
 
-                subscriptionUnis.add(subUni);
-            }
-
-            // Wait for all subscriptions to complete
-            Uni.join().all(subscriptionUnis).andCollectFailures()
-                    .await().indefinitely();
-
-            boolean lazyStart = ic.getClientLazyStart();
-            this.ackHandler = null;
-            this.failureHandler = createFailureHandler(ic, solace);
-
-            // TODO Here use a subscription receiver.receiveAsync with an internal queue
-            this.pollerThread = Executors.newSingleThreadExecutor();
-
-            Multi<? extends Message<?>> incomingMulti = Multi.createBy().repeating()
-                    .uni(() -> Uni.createFrom().item(() -> {
-                        try {
-                            return receiver.receive();
-                        } catch (JCSMPException e) {
-                            throw new RuntimeException(e);
-                        }
-                    })
-                            .runSubscriptionOn(pollerThread))
-                    .until(__ -> closed.get())
-                    .emitOn(context::runOnContext)
-                    .map(consumed -> new SolaceInboundMessage<>(consumed, ackHandler, failureHandler,
-                            unacknowledgedMessageTracker, this::reportFailure));
-
-            if (ic.getClientTracingEnabled()) {
-                solaceOpenTelemetryInstrumenter = SolaceOpenTelemetryInstrumenter.createForIncoming(openTelemetryInstance);
-                incomingMulti = incomingMulti.map(message -> {
-                    BytesXMLMessage consumedMessage = message.getMetadata(SolaceInboundMetadata.class).get().getMessage();
-                    Map<String, String> messageProperties = new HashMap<>();
-
-                    messageProperties.put("messaging.solace.replication_group_message_id",
-                            consumedMessage.getReplicationGroupMessageId().toString());
-                    messageProperties.put("messaging.solace.priority", Integer.toString(consumedMessage.getPriority()));
-                    if (!consumedMessage.getProperties().isEmpty()) {
-                        messageProperties.putAll(SolaceMessageUtils.getPropertiesMap(consumedMessage.getProperties()));
-                    }
-                    SolaceTrace solaceTrace = null;
-                    try {
-                        solaceTrace = new SolaceTrace.Builder()
-                                .withDestinationKind("queue")
-                                .withTopic(consumedMessage.getDestination().getName())
-                                .withMessageID(consumedMessage.getApplicationMessageId())
-                                .withCorrelationID(consumedMessage.getCorrelationId())
-                                .withPartitionKey(
-                                        consumedMessage
-                                                .getProperties()
-                                                .containsKey(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
-                                                        ? consumedMessage.getProperties()
-                                                                .getString(
-                                                                        XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
-                                                        : null)
-                                .withPayloadSize(
-                                        (long) SolaceMessageUtils.getPayloadAsBytes(consumedMessage).length)
-                                .withProperties(messageProperties)
-                                .build();
-                    } catch (SDTException e) {
-                        throw new RuntimeException(e);
-                    }
-                    return solaceOpenTelemetryInstrumenter.traceIncoming(message, solaceTrace, true);
-                });
-            } else {
-                solaceOpenTelemetryInstrumenter = null;
-            }
-
-            this.stream = incomingMulti.plug(m -> lazyStart
-                    ? m.onSubscription()
-                            .call(() -> startReceiver(receiver))
-                    : m)
-                    .onItem().invoke(() -> alive.set(true))
-                    .onFailure().retry().withBackOff(Duration.ofSeconds(1)).atMost(3).onFailure().invoke(this::reportFailure);
-
-            if (!lazyStart) {
-                startReceiver(receiver).await().indefinitely();
-            }
-        } catch (JCSMPException e) {
-            throw new RuntimeException(e);
+        switch (ic.getClientTypeDirectBackPressureStrategy()) {
+            case "oldest":
+                builder.onBackPressureDropLatest(ic.getClientTypeDirectBackPressureBufferCapacity());
+                break;
+            case "latest":
+                builder.onBackPressureDropOldest(ic.getClientTypeDirectBackPressureBufferCapacity());
+                break;
+            default:
+                builder.onBackPressureElastic();
+                break;
         }
-    }
 
-    private Uni<Void> subscribeToTopic(JCSMPSession session, String subscription) {
-        return Uni.createFrom().item(Unchecked.supplier(() -> {
-            try {
-                Topic topic = JCSMPFactory.onlyInstance().createTopic(subscription);
-                session.addSubscription(topic);
-                return null;
-            } catch (JCSMPException e) {
-                SolaceLogging.log.errorf("Failed to subscribe to topic %s on channel %s", subscription, channel, e);
-                return null;
-            }
-        }));
+        this.receiver = builder.build();
+
+        boolean lazyStart = ic.getClientLazyStart();
+        this.ackHandler = null;
+        this.failureHandler = createFailureHandler(ic, solace);
+
+        // TODO Here use a subscription receiver.receiveAsync with an internal queue
+        this.pollerThread = Executors.newSingleThreadExecutor();
+
+        Multi<? extends Message<?>> incomingMulti = Multi.createBy().repeating()
+                .uni(() -> Uni.createFrom().item(this.receiver::receiveMessage)
+                        .runSubscriptionOn(pollerThread))
+                .until(__ -> closed.get())
+                .emitOn(context::runOnContext)
+                .map(consumed -> new SolaceInboundMessage<>(consumed, ackHandler, failureHandler,
+                        unacknowledgedMessageTracker, this::reportFailure));
+
+        if (ic.getClientTracingEnabled()) {
+            solaceOpenTelemetryInstrumenter = SolaceOpenTelemetryInstrumenter.createForIncoming(openTelemetryInstance);
+            incomingMulti = incomingMulti.map(message -> {
+                InboundMessage consumedMessage = message.getMetadata(SolaceInboundMetadata.class).get().getMessage();
+                Map<String, String> messageProperties = new HashMap<>();
+
+                messageProperties.put("messaging.solace.replication_group_message_id",
+                        consumedMessage.getReplicationGroupMessageId().toString());
+                messageProperties.put("messaging.solace.priority", Integer.toString(consumedMessage.getPriority()));
+                if (consumedMessage.getProperties().size() > 0) {
+                    messageProperties.putAll(consumedMessage.getProperties());
+                }
+                SolaceTrace solaceTrace = new SolaceTrace.Builder()
+                        .withDestinationKind("queue")
+                        .withTopic(consumedMessage.getDestinationName())
+                        .withMessageID(consumedMessage.getApplicationMessageId())
+                        .withCorrelationID(consumedMessage.getCorrelationId())
+                        .withPartitionKey(
+                                consumedMessage
+                                        .hasProperty(SolaceConstants.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
+                                                ? consumedMessage
+                                                        .getProperty(
+                                                                SolaceConstants.MessageUserPropertyConstants.QUEUE_PARTITION_KEY)
+                                                : null)
+                        .withPayloadSize(Long.valueOf(consumedMessage.getPayloadAsBytes().length))
+                        .withProperties(messageProperties)
+                        .build();
+                return solaceOpenTelemetryInstrumenter.traceIncoming(message, solaceTrace, true);
+            });
+        } else {
+            solaceOpenTelemetryInstrumenter = null;
+        }
+
+        this.stream = incomingMulti.plug(m -> lazyStart
+                ? m.onSubscription()
+                        .call(() -> Uni.createFrom().completionStage(this.receiver.startAsync()))
+                : m)
+                .onItem().invoke(() -> alive.set(true))
+                .onFailure().retry().withBackOff(Duration.ofSeconds(1)).atMost(3).onFailure().invoke(this::reportFailure);
+
+        if (!lazyStart) {
+            this.receiver.start();
+        }
+
     }
 
     private synchronized void reportFailure(Throwable throwable) {
@@ -172,19 +155,7 @@ public class SolaceDirectMessageIncomingChannel {
         failures.add(throwable);
     }
 
-    private Uni<Void> startReceiver(XMLMessageConsumer receiver) {
-        return Uni.createFrom().item(Unchecked.supplier(() -> {
-            try {
-                receiver.start();
-                return Uni.createFrom().voidItem();
-            } catch (JCSMPException e) {
-                SolaceLogging.log.errorf(e, "Failed to start Solace consumer for channel %s", channel);
-                throw new RuntimeException(e);
-            }
-        })).replaceWithVoid();
-    }
-
-    private SolaceFailureHandler createFailureHandler(SolaceConnectorIncomingConfiguration ic, JCSMPSession solace) {
+    private SolaceFailureHandler createFailureHandler(SolaceConnectorIncomingConfiguration ic, MessagingService solace) {
         String strategy = ic.getConsumerFailureStrategy();
         SolaceFailureHandler.Strategy actualStrategy = SolaceFailureHandler.Strategy.from(strategy);
         switch (actualStrategy) {
@@ -196,7 +167,7 @@ public class SolaceDirectMessageIncomingChannel {
                 }
                 return new SolaceErrorTopic(ic.getChannel(), ic.getConsumerErrorTopic().get(),
                         ic.getConsumerErrorMessageDmqEligible(), ic.getConsumerErrorMessageTtl().orElse(null),
-                        ic.getConsumerErrorMessageMaxDeliveryAttempts(), solace);
+                        ic.getConsumerErrorMessageMaxDeliveryAttempts(), null, solace);
             default:
                 throw ex.illegalArgumentInvalidFailureStrategy(
                         "Direct Consumer supports 'ignore' and 'error_topic' failure strategies. Please check your configured failure strategy :: "
@@ -211,7 +182,7 @@ public class SolaceDirectMessageIncomingChannel {
 
     public void waitForUnAcknowledgedMessages() {
         try {
-            receiver.closeSync();
+            receiver.terminate(3000);
             SolaceLogging.log.infof("Waiting for incoming channel %s messages to be acknowledged", channel);
             if (!unacknowledgedMessageTracker.awaitEmpty(this.gracefulShutdownWaitTimeout, TimeUnit.MILLISECONDS)) {
                 SolaceLogging.log.infof("Timed out while waiting for the" +
@@ -219,8 +190,6 @@ public class SolaceDirectMessageIncomingChannel {
             }
         } catch (InterruptedException e) {
             SolaceLogging.log.infof("Interrupted while waiting for messages on channel %s to get acknowledged", channel);
-            throw new RuntimeException(e);
-        } catch (JCSMPException e) {
             throw new RuntimeException(e);
         }
     }
@@ -243,17 +212,17 @@ public class SolaceDirectMessageIncomingChannel {
                 this.pollerThread.shutdownNow();
             }
         }
-        if (!receiver.isClosed()) {
-            receiver.close();
+        if (receiver.isRunning()) {
+            receiver.terminate(3000);
         }
     }
 
     public void isStarted(HealthReport.HealthReportBuilder builder) {
-        builder.add(channel, !solace.isClosed());
+        builder.add(channel, solace.isConnected());
     }
 
     public void isReady(HealthReport.HealthReportBuilder builder) {
-        builder.add(channel, !solace.isClosed() && receiver != null && !receiver.isClosed());
+        builder.add(channel, solace.isConnected() && receiver != null && receiver.isRunning());
     }
 
     public void isAlive(HealthReport.HealthReportBuilder builder) {
@@ -262,10 +231,15 @@ public class SolaceDirectMessageIncomingChannel {
             synchronized (this) {
                 reportedFailures = new ArrayList<>(failures);
             }
-            builder.add(channel, !solace.isClosed() && alive.get(),
+            builder.add(channel, solace.isConnected() && alive.get(),
                     reportedFailures.stream().map(Throwable::getMessage).collect(Collectors.joining()));
         } else {
-            builder.add(channel, !solace.isClosed() && alive.get());
+            builder.add(channel, solace.isConnected() && alive.get());
         }
+    }
+
+    @Override
+    public void onStateChange(ReceiverState receiverState, ReceiverState receiverState1, long l) {
+
     }
 }
