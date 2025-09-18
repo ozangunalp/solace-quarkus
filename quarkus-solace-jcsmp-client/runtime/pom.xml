@@ -8,7 +8,7 @@
     <version>${revision}${sha1}${changelist}</version>
   </parent>
   <artifactId>quarkus-solace-jcsmp-client</artifactId>
-  <name>Quarkus Solace Client - Runtime</name>
+  <name>Quarkus Solace JCSMP Client - Runtime</name>
   <dependencies>
     <dependency>
       <groupId>io.quarkus</groupId>

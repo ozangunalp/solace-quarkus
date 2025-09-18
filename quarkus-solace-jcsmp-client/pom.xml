@@ -9,7 +9,7 @@
         <version>${revision}${sha1}${changelist}</version>
     </parent>
     <artifactId>quarkus-solace-jcsmp-client-parent</artifactId>
-    <name>Quarkus Solace Client - Parent</name>
+    <name>Quarkus Solace JCSMP Client - Parent</name>
     <packaging>pom</packaging>
 
     <modules>

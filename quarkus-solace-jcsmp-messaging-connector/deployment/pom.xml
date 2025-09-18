@@ -8,7 +8,7 @@
         <version>${revision}${sha1}${changelist}</version>
     </parent>
     <artifactId>quarkus-solace-jcsmp-messaging-connector-deployment</artifactId>
-    <name>Quarkus Solace Messaging Connector - Deployment</name>
+    <name>Quarkus Solace JCSMP Messaging Connector - Deployment</name>
     <dependencies>
         <dependency>
             <groupId>io.quarkus</groupId>

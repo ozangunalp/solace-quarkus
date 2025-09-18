@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>solace-jcsmp-client-integration-tests</artifactId>
-    <name>Quarkus Solace Client - Integration Tests</name>
+    <name>Quarkus Solace JCSMP Client - Integration Tests</name>
 
     <dependencies>
         <dependency>

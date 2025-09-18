@@ -8,7 +8,7 @@
         <version>${revision}${sha1}${changelist}</version>
     </parent>
     <artifactId>quarkus-solace-jcsmp-messaging-connector-parent</artifactId>
-    <name>Quarkus Solace Messaging Connector - Parent</name>
+    <name>Quarkus Solace JCSMP Messaging Connector - Parent</name>
     <packaging>pom</packaging>
 
     <modules>

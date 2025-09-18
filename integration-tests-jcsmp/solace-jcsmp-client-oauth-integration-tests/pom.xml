@@ -10,7 +10,7 @@
     </parent>
 
     <artifactId>solace-jcsmp-client-oauth-integration-tests</artifactId>
-    <name>Quarkus Solace Client - OAuth Integration Tests</name>
+    <name>Quarkus Solace JCSMP Client - OAuth Integration Tests</name>
 
     <dependencies>
         <dependency>

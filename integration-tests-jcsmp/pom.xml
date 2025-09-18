@@ -7,7 +7,7 @@
         <version>${revision}${sha1}${changelist}</version>
     </parent>
     <artifactId>quarkus-solace-jcsmp-integration-tests-parent</artifactId>
-    <name>Quarkus Solace - Integration Tests - Parent</name>
+    <name>Quarkus Solace JCSMP - Integration Tests - Parent</name>
 
     <packaging>pom</packaging>
     <modules>
