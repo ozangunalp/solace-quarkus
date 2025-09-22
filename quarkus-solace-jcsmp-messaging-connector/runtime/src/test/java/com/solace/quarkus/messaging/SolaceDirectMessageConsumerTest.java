@@ -43,7 +43,7 @@ public class SolaceDirectMessageConsumerTest extends WeldTestBase {
     @Order(1)
     void consumer() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.client.type", "direct")
                 .with("mp.messaging.incoming.in.consumer.subscriptions", "quarkus/integration/test/replay/messages");
 
@@ -80,7 +80,7 @@ public class SolaceDirectMessageConsumerTest extends WeldTestBase {
     @Order(2)
     void consumerFailedProcessingPublishToErrorTopic() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.client.type", "direct")
                 .with("mp.messaging.incoming.in.consumer.subscriptions",
                         SolaceContainer.INTEGRATION_TEST_QUEUE_SUBSCRIPTION)
@@ -88,7 +88,7 @@ public class SolaceDirectMessageConsumerTest extends WeldTestBase {
                 .with("mp.messaging.incoming.in.consumer.error.topic",
                         SolaceContainer.INTEGRATION_TEST_ERROR_QUEUE_SUBSCRIPTION)
                 .with("mp.messaging.incoming.in.consumer.error.message.ttl", 1000)
-                .with("mp.messaging.incoming.error-in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.error-in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.error-in.consumer.queue.name", SolaceContainer.INTEGRATION_TEST_ERROR_QUEUE_NAME)
                 .with("mp.messaging.incoming.error-in.consumer.queue.type", "durable-exclusive");
 
@@ -126,7 +126,7 @@ public class SolaceDirectMessageConsumerTest extends WeldTestBase {
     @Order(3)
     void consumerPublishToErrorTopicPermissionException() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.client.type", "direct")
                 .with("mp.messaging.incoming.in.consumer.subscriptions",
                         SolaceContainer.INTEGRATION_TEST_QUEUE_SUBSCRIPTION)
@@ -134,7 +134,7 @@ public class SolaceDirectMessageConsumerTest extends WeldTestBase {
                 .with("mp.messaging.incoming.in.consumer.error.topic",
                         "publish/deny")
                 .with("mp.messaging.incoming.in.consumer.error.message.max-delivery-attempts", 0)
-                .with("mp.messaging.incoming.error-in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.error-in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.error-in.consumer.queue.name", SolaceContainer.INTEGRATION_TEST_ERROR_QUEUE_NAME)
                 .with("mp.messaging.incoming.error-in.consumer.queue.type", "durable-exclusive");
 

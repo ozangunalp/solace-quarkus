@@ -25,11 +25,11 @@ public class SolaceProcessorTest extends WeldTestBase {
     void consumer() {
         String processedTopic = topic + "/processed";
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.missing-resource-creation-strategy", "create-on-start")
                 .with("mp.messaging.incoming.in.consumer.subscriptions", topic)
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", processedTopic);
 
         // Run app that processes messages

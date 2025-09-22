@@ -28,7 +28,7 @@ public class SolaceDirectMessageConsumerHealthTest extends WeldTestBase {
     void solaceConsumerHealthCheck() {
         MapBasedConfig config = new MapBasedConfig()
                 .with("mp.messaging.incoming.in.client.type", "direct")
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.subscriptions", topic);
 
         // Run app that consumes messages
@@ -77,7 +77,7 @@ public class SolaceDirectMessageConsumerHealthTest extends WeldTestBase {
     void solaceConsumerLivenessCheck() {
         MapBasedConfig config = new MapBasedConfig()
                 .with("mp.messaging.incoming.in.client.type", "direct")
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.subscriptions", topic);
 
         // Run app that consumes messages

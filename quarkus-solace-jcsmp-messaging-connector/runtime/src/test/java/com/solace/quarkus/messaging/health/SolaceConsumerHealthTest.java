@@ -26,7 +26,7 @@ public class SolaceConsumerHealthTest extends WeldTestBase {
     @Test
     void solaceConsumerHealthCheck() {
         MapBasedConfig config = new MapBasedConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.name", queue)
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.missing-resource-creation-strategy", "create-on-start")
@@ -77,7 +77,7 @@ public class SolaceConsumerHealthTest extends WeldTestBase {
     @Test
     void solaceConsumerLivenessCheck() {
         MapBasedConfig config = new MapBasedConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.name", queue)
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.missing-resource-creation-strategy", "create-on-start")

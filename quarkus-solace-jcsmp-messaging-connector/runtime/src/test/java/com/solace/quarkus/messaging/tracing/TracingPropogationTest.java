@@ -19,6 +19,8 @@ import org.eclipse.microprofile.reactive.messaging.Outgoing;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import com.solace.quarkus.messaging.base.WeldTestBase;
 import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
@@ -42,6 +44,7 @@ import io.opentelemetry.sdk.trace.samplers.Sampler;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.reactive.messaging.test.common.config.MapBasedConfig;
 
+@Execution(ExecutionMode.SAME_THREAD)
 public class TracingPropogationTest extends WeldTestBase {
     private SdkTracerProvider tracerProvider;
     private InMemorySpanExporter spanExporter;
@@ -72,7 +75,7 @@ public class TracingPropogationTest extends WeldTestBase {
     @Test
     void consumer() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.client.tracing-enabled", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.name", queue)
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
@@ -122,7 +125,7 @@ public class TracingPropogationTest extends WeldTestBase {
     @Test
     void publisher() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.client.tracing-enabled", "true")
                 .with("mp.messaging.outgoing.out.producer.topic", topic);
 
@@ -176,13 +179,13 @@ public class TracingPropogationTest extends WeldTestBase {
     void processor() {
         String processedTopic = topic + "/processed";
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.client.tracing-enabled", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.name", queue)
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.missing-resource-creation-strategy", "create-on-start")
                 .with("mp.messaging.incoming.in.consumer.subscriptions", topic)
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.client.tracing-enabled", "true")
                 .with("mp.messaging.outgoing.out.producer.topic", processedTopic);
 

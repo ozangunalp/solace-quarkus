@@ -32,7 +32,7 @@ public class SolaceDirectMessagePublisherTest extends WeldTestBase {
     void publisher() {
         MapBasedConfig config = commonConfig()
                 .with("mp.messaging.outgoing.out.client.type", "direct")
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", topic);
 
         List<String> expected = new CopyOnWriteArrayList<>();
@@ -68,7 +68,7 @@ public class SolaceDirectMessagePublisherTest extends WeldTestBase {
     void publisherWithDynamicDestination() {
         MapBasedConfig config = commonConfig()
                 .with("mp.messaging.outgoing.out.client.type", "direct")
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", topic);
 
         List<String> expected = new CopyOnWriteArrayList<>();
@@ -146,7 +146,7 @@ public class SolaceDirectMessagePublisherTest extends WeldTestBase {
     //    @Test
     //    void publisherWithBackPressureRejectWaitForPublisherReadiness() {
     //        MapBasedConfig config = new MapBasedConfig()
-    //                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+    //                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
     //                .with("mp.messaging.outgoing.out.producer.topic", topic)
     //                .with("mp.messaging.outgoing.out.producer.back-pressure.buffer-capacity", 1);
     //

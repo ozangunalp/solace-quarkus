@@ -25,7 +25,7 @@ public class SolacePublisherHealthTest extends WeldTestBase {
     @Test
     void publisherHealthCheck() {
         MapBasedConfig config = new MapBasedConfig()
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", topic);
 
         List<String> expected = new CopyOnWriteArrayList<>();
@@ -75,7 +75,7 @@ public class SolacePublisherHealthTest extends WeldTestBase {
     @Test
     void publisherLivenessCheck() {
         MapBasedConfig config = new MapBasedConfig()
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", "publish/deny");
 
         List<String> expected = new CopyOnWriteArrayList<>();

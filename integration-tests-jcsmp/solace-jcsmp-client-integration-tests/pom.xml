@@ -20,7 +20,7 @@
         </dependency>
         <dependency>
             <groupId>com.solace.quarkus</groupId>
-            <artifactId>quarkus-solace-client</artifactId>
+            <artifactId>quarkus-solace-jcsmp-client</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

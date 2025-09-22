@@ -34,7 +34,7 @@ import io.vertx.mutiny.core.Vertx;
 
 public class SolaceOutgoingChannel {
 
-    private final XMLMessageProducer publisher;
+    private XMLMessageProducer publisher;
     private final String channel;
     private final Flow.Subscriber<? extends Message<?>> subscriber;
     private final Topic topic;
@@ -72,7 +72,8 @@ public class SolaceOutgoingChannel {
         oc.getProducerDeliveryAckTimeout().ifPresent(producerFlowProperties::setPubAckTime);
         oc.getProducerDeliveryAckWindowSize().ifPresent(producerFlowProperties::setWindowSize);
         try {
-            this.publisher = this.solace.getMessageProducer(new PublishReceipt());
+            PublishReceipt publishReceipt = new PublishReceipt();
+            this.publisher = this.solace.getMessageProducer(publishReceipt);
         } catch (JCSMPException e) {
             throw new RuntimeException(e);
         }
@@ -248,7 +249,7 @@ public class SolaceOutgoingChannel {
                     } else {
                         publisher.send(outboundMessage, topic.get());
                         e.complete("SUCCESS");
-                        //                        publishedMessagesTracker.decrement();
+                        publishedMessagesTracker.decrement();
                     }
                 }
             } catch (Exception publisherOverflowException) {

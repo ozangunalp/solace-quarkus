@@ -35,12 +35,12 @@ public class EndToEndPerformanceTest extends WeldTestBase {
     public void endToEndPerformanceTesttWithBackPressureWaitAndWaitForPublishReceipt() {
         String processedTopic = topic + "/processed";
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.name", queue)
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.missing-resource-creation-strategy", "create-on-start")
                 .with("mp.messaging.incoming.in.consumer.subscriptions", topic)
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", processedTopic);
 
         // Run app that consumes messages
@@ -104,12 +104,12 @@ public class EndToEndPerformanceTest extends WeldTestBase {
     public void endToEndPerformanceTesttWithBackPressureWaitAndNoWaitForPublishReceipt() {
         String processedTopic = topic + "/processed";
         MapBasedConfig config = new MapBasedConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.name", queue)
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.missing-resource-creation-strategy", "create-on-start")
                 .with("mp.messaging.incoming.in.consumer.subscriptions", topic)
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", processedTopic)
                 .with("mp.messaging.outgoing.out.producer.waitForPublishReceipt", false);
 
@@ -176,12 +176,12 @@ public class EndToEndPerformanceTest extends WeldTestBase {
     public void endToEndPerformanceTesttWithBackPressureElasticAndWaitForPublishReceipt() {
         String processedTopic = topic + "/processed";
         MapBasedConfig config = new MapBasedConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.name", queue)
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.missing-resource-creation-strategy", "create-on-start")
                 .with("mp.messaging.incoming.in.consumer.subscriptions", topic)
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", processedTopic)
                 .with("mp.messaging.outgoing.out.producer.back-pressure.strategy", "elastic");
 
@@ -248,12 +248,12 @@ public class EndToEndPerformanceTest extends WeldTestBase {
     public void endToEndPerformanceTesttWithBackPressureElasticAndNoWaitForPublishReceipt() {
         String processedTopic = topic + "/processed";
         MapBasedConfig config = new MapBasedConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.name", queue)
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.missing-resource-creation-strategy", "create-on-start")
                 .with("mp.messaging.incoming.in.consumer.subscriptions", topic)
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", processedTopic)
                 .with("mp.messaging.outgoing.out.producer.back-pressure.strategy", "elastic")
                 .with("mp.messaging.outgoing.out.producer.waitForPublishReceipt", false);
@@ -335,12 +335,12 @@ public class EndToEndPerformanceTest extends WeldTestBase {
     public void endToEndBlockingProcessorPerformanceTesttWithBackPressureWaitAndWaitForPublishReceipt() {
         String processedTopic = topic + "/processed";
         MapBasedConfig config = new MapBasedConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.name", queue)
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.missing-resource-creation-strategy", "create-on-start")
                 .with("mp.messaging.incoming.in.consumer.subscriptions", topic)
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", processedTopic);
 
         // Run app that consumes messages
@@ -405,12 +405,12 @@ public class EndToEndPerformanceTest extends WeldTestBase {
     public void endToEndBlockingProcessorPerformanceTesttWithBackPressureWaitAndNoWaitForPublishReceipt() {
         String processedTopic = topic + "/processed";
         MapBasedConfig config = new MapBasedConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.name", queue)
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.missing-resource-creation-strategy", "create-on-start")
                 .with("mp.messaging.incoming.in.consumer.subscriptions", topic)
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", processedTopic)
                 .with("mp.messaging.outgoing.out.producer.waitForPublishReceipt", false);
 
@@ -476,12 +476,12 @@ public class EndToEndPerformanceTest extends WeldTestBase {
     public void endToEndBlockingProcessorPerformanceTesttWithBackPressureElasticAndWaitForPublishReceipt() {
         String processedTopic = topic + "/processed";
         MapBasedConfig config = new MapBasedConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.name", queue)
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.missing-resource-creation-strategy", "create-on-start")
                 .with("mp.messaging.incoming.in.consumer.subscriptions", topic)
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", processedTopic)
                 .with("mp.messaging.outgoing.out.producer.back-pressure.strategy", "elastic");
 
@@ -548,12 +548,12 @@ public class EndToEndPerformanceTest extends WeldTestBase {
     public void endToEndBlockingProcessorPerformanceTesttWithBackPressureElasticAndNoWaitForPublishReceipt() {
         String processedTopic = topic + "/processed";
         MapBasedConfig config = new MapBasedConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.name", queue)
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.missing-resource-creation-strategy", "create-on-start")
                 .with("mp.messaging.incoming.in.consumer.subscriptions", topic)
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", processedTopic)
                 .with("mp.messaging.outgoing.out.producer.back-pressure.strategy", "elastic")
                 .with("mp.messaging.outgoing.out.producer.waitForPublishReceipt", false);

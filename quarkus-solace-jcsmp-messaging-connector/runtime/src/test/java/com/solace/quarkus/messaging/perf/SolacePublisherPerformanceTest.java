@@ -30,7 +30,7 @@ public class SolacePublisherPerformanceTest extends WeldTestBase {
     @Test
     void publisherPerformanceTestWithBackPressureWaitAndWaitForPublishReceipt() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", topic);
 
         List<String> received = new CopyOnWriteArrayList<>();
@@ -82,7 +82,7 @@ public class SolacePublisherPerformanceTest extends WeldTestBase {
     @Test
     void publisherPerformanceTestWithBackPressureWaitAndNoWaitForPublishReceipt() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", topic)
                 .with("mp.messaging.outgoing.out.producer.waitForPublishReceipt", false);
 
@@ -135,7 +135,7 @@ public class SolacePublisherPerformanceTest extends WeldTestBase {
     @Test
     void publisherPerformanceTestWithBackPressureElasticAndWaitForPublishReceipt() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", topic)
                 .with("mp.messaging.outgoing.out.producer.back-pressure.strategy", "elastic");
 
@@ -188,7 +188,7 @@ public class SolacePublisherPerformanceTest extends WeldTestBase {
     @Test
     void publisherPerformanceTestWithBackPressureElasticAndNoWaitForPublishReceipt() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.outgoing.out.connector", "quarkus-solace")
+                .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.producer.topic", topic)
                 .with("mp.messaging.outgoing.out.producer.back-pressure.strategy", "elastic")
                 .with("mp.messaging.outgoing.out.producer.waitForPublishReceipt", false);

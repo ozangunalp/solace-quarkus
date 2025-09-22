@@ -43,7 +43,7 @@ public class SolaceConsumerTest extends WeldTestBase {
     @Order(1)
     void consumer() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.name", queue)
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.missing-resource-creation-strategy", "create-on-start")
@@ -82,7 +82,7 @@ public class SolaceConsumerTest extends WeldTestBase {
     @Order(2)
     void consumerReplay() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.name", queue)
                 .with("mp.messaging.incoming.in.consumer.queue.type", "durable-exclusive")
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
@@ -102,7 +102,7 @@ public class SolaceConsumerTest extends WeldTestBase {
     @Order(3)
     void consumerWithSelectorQuery() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.name", queue)
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.missing-resource-creation-strategy", "create-on-start")
@@ -145,14 +145,14 @@ public class SolaceConsumerTest extends WeldTestBase {
     @Order(4)
     void consumerFailedProcessingPublishToErrorTopic() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.name", SolaceContainer.INTEGRATION_TEST_QUEUE_NAME)
                 .with("mp.messaging.incoming.in.consumer.queue.type", "durable-exclusive")
                 .with("mp.messaging.incoming.in.consumer.failure-strategy", "error_topic")
                 .with("mp.messaging.incoming.in.consumer.error.topic",
                         SolaceContainer.INTEGRATION_TEST_ERROR_QUEUE_SUBSCRIPTION)
                 .with("mp.messaging.incoming.in.consumer.error.message.ttl", 1000)
-                .with("mp.messaging.incoming.error-in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.error-in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.error-in.consumer.queue.name", SolaceContainer.INTEGRATION_TEST_ERROR_QUEUE_NAME)
                 .with("mp.messaging.incoming.error-in.consumer.queue.type", "durable-exclusive");
 
@@ -190,12 +190,12 @@ public class SolaceConsumerTest extends WeldTestBase {
     @Order(5)
     void consumerFailedProcessingMoveToDMQ() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.name", SolaceContainer.INTEGRATION_TEST_QUEUE_NAME)
                 .with("mp.messaging.incoming.in.consumer.queue.type", "durable-exclusive")
                 .with("mp.messaging.incoming.in.consumer.queue.supports-nacks", "true")
                 .with("mp.messaging.incoming.in.consumer.failure-strategy", "discard")
-                .with("mp.messaging.incoming.dmq-in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.dmq-in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.dmq-in.consumer.queue.name", SolaceContainer.INTEGRATION_TEST_DMQ_NAME)
                 .with("mp.messaging.incoming.dmq-in.consumer.queue.type", "durable-exclusive");
 
@@ -232,19 +232,19 @@ public class SolaceConsumerTest extends WeldTestBase {
     @Order(6)
     void partitionedQueue() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.incoming.consumer-1.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.consumer-1.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.consumer-1.consumer.queue.name",
                         SolaceContainer.INTEGRATION_TEST_PARTITION_QUEUE_NAME)
                 .with("mp.messaging.incoming.consumer-1.consumer.queue.type", "durable-non-exclusive")
-                .with("mp.messaging.incoming.consumer-2.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.consumer-2.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.consumer-2.consumer.queue.name",
                         SolaceContainer.INTEGRATION_TEST_PARTITION_QUEUE_NAME)
                 .with("mp.messaging.incoming.consumer-2.consumer.queue.type", "durable-non-exclusive")
-                .with("mp.messaging.incoming.consumer-3.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.consumer-3.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.consumer-3.consumer.queue.name",
                         SolaceContainer.INTEGRATION_TEST_PARTITION_QUEUE_NAME)
                 .with("mp.messaging.incoming.consumer-3.consumer.queue.type", "durable-non-exclusive")
-                .with("mp.messaging.incoming.consumer-4.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.consumer-4.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.consumer-4.consumer.queue.name",
                         SolaceContainer.INTEGRATION_TEST_PARTITION_QUEUE_NAME)
                 .with("mp.messaging.incoming.consumer-4.consumer.queue.type", "durable-non-exclusive");
@@ -315,14 +315,14 @@ public class SolaceConsumerTest extends WeldTestBase {
     @Order(7)
     void consumerPublishToErrorTopicPermissionException() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.name", SolaceContainer.INTEGRATION_TEST_QUEUE_NAME)
                 .with("mp.messaging.incoming.in.consumer.queue.type", "durable-exclusive")
                 .with("mp.messaging.incoming.in.consumer.failure-strategy", "error_topic")
                 .with("mp.messaging.incoming.in.consumer.error.topic",
                         "publish/deny")
                 .with("mp.messaging.incoming.in.consumer.error.message.max-delivery-attempts", 0)
-                .with("mp.messaging.incoming.error-in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.error-in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.error-in.consumer.queue.name", SolaceContainer.INTEGRATION_TEST_ERROR_QUEUE_NAME)
                 .with("mp.messaging.incoming.error-in.consumer.queue.type", "durable-exclusive");
 
@@ -416,7 +416,7 @@ public class SolaceConsumerTest extends WeldTestBase {
     @Order(9)
     void consumerCreateMissingResourceAddSubscriptionPermissionException() {
         MapBasedConfig config = commonConfig()
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.queue.add-additional-subscriptions", "true")
                 .with("mp.messaging.incoming.in.consumer.queue.missing-resource-creation-strategy", "create-on-start")
                 .with("mp.messaging.incoming.in.consumer.queue.name", SolaceContainer.INTEGRATION_TEST_QUEUE_NAME)

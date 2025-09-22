@@ -28,7 +28,7 @@ public class SolaceDirectMessageConsumerPerformanceTest extends WeldTestBase {
     public void solaceConsumerPerformanceTest() {
         MapBasedConfig config = commonConfig()
                 .with("mp.messaging.incoming.in.client.type", "direct")
-                .with("mp.messaging.incoming.in.connector", "quarkus-solace")
+                .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.incoming.in.consumer.subscriptions", topic);
 
         // Run app that consumes messages

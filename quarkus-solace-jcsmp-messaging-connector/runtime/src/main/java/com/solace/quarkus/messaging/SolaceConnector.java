@@ -71,7 +71,7 @@ import io.vertx.mutiny.core.Vertx;
 @ConnectorAttribute(name = "producer.back-pressure.buffer-capacity", type = "int", direction = OUTGOING, description = "Outgoing messages backpressure buffer capacity", defaultValue = "1024")
 public class SolaceConnector implements InboundConnector, OutboundConnector, HealthReporter {
 
-    public static final String CONNECTOR_NAME = "quarkus-solace";
+    public static final String CONNECTOR_NAME = "quarkus-solace-jcsmp";
 
     @Inject
     ExecutionHolder executionHolder;

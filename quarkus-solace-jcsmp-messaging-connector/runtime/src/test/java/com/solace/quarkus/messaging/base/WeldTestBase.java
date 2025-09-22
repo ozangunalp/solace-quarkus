@@ -75,7 +75,7 @@ public class WeldTestBase extends SolaceBaseTest {
     public void stopContainer() {
         if (container != null) {
             getBeanManager().createInstance()
-                    .select(SolaceConnector.class, ConnectorLiteral.of("quarkus-solace")).get();
+                    .select(SolaceConnector.class, ConnectorLiteral.of("quarkus-solace-jcsmp")).get();
             container.close();
         }
         // Release the config objects

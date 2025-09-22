@@ -5,7 +5,7 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 
 public class SolaceMessagingProcessor {
 
-    public static final String FEATURE = "solace-messaging-connector";
+    public static final String FEATURE = "solace-jcsmp-messaging-connector";
 
     @BuildStep
     FeatureBuildItem feature() {
