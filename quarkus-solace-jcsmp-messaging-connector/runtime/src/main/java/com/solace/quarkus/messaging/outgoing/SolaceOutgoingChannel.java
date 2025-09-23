@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import io.smallrye.mutiny.subscription.UniEmitter;
 import jakarta.enterprise.inject.Instance;
 
 import org.eclipse.microprofile.reactive.messaging.Message;
@@ -32,7 +33,7 @@ import io.smallrye.reactive.messaging.providers.helpers.MultiUtils;
 import io.vertx.core.json.Json;
 import io.vertx.mutiny.core.Vertx;
 
-public class SolaceOutgoingChannel {
+public class SolaceOutgoingChannel implements JCSMPStreamingPublishCorrelatingEventHandler {
 
     private XMLMessageProducer publisher;
     private final String channel;
@@ -72,8 +73,7 @@ public class SolaceOutgoingChannel {
         oc.getProducerDeliveryAckTimeout().ifPresent(producerFlowProperties::setPubAckTime);
         oc.getProducerDeliveryAckWindowSize().ifPresent(producerFlowProperties::setWindowSize);
         try {
-            PublishReceipt publishReceipt = new PublishReceipt();
-            this.publisher = this.solace.getMessageProducer(publishReceipt);
+            this.publisher = this.solace.getMessageProducer(this);
         } catch (JCSMPException e) {
             throw new RuntimeException(e);
         }
@@ -307,6 +307,20 @@ public class SolaceOutgoingChannel {
                     reportedFailures.stream().map(Throwable::getMessage).collect(Collectors.joining()));
         } else {
             builder.add(channel, !solace.isClosed() && alive.get());
+        }
+    }
+
+    @Override
+    public void responseReceivedEx(Object o) {
+        if (o instanceof UniEmitter) {
+            ((UniEmitter<Object>) o).complete("SUCCESS");
+        }
+    }
+
+    @Override
+    public void handleErrorEx(Object o, JCSMPException e, long l) {
+        if (o instanceof UniEmitter) {
+            ((UniEmitter<Object>) o).fail(e);
         }
     }
 }

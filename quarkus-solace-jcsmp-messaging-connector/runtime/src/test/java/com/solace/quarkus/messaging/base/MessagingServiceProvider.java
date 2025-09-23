@@ -8,7 +8,7 @@ import com.solacesystems.jcsmp.JCSMPSession;
 @ApplicationScoped
 public class MessagingServiceProvider {
 
-    static JCSMPSession messagingService;
+    public static JCSMPSession messagingService;
 
     @Produces
     JCSMPSession messagingService() {

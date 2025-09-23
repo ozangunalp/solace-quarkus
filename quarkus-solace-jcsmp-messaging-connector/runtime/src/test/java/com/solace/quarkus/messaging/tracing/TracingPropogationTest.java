@@ -11,6 +11,8 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
+import com.solace.quarkus.messaging.base.MessagingServiceProvider;
+import com.solace.quarkus.messaging.base.SolaceContainer;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import org.eclipse.microprofile.reactive.messaging.Incoming;
@@ -18,6 +20,7 @@ import org.eclipse.microprofile.reactive.messaging.Message;
 import org.eclipse.microprofile.reactive.messaging.Outgoing;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
@@ -73,6 +76,7 @@ public class TracingPropogationTest extends WeldTestBase {
     }
 
     @Test
+    @Order(2)
     void consumer() {
         MapBasedConfig config = commonConfig()
                 .with("mp.messaging.incoming.in.connector", "quarkus-solace-jcsmp")
@@ -124,6 +128,21 @@ public class TracingPropogationTest extends WeldTestBase {
 
     @Test
     void publisher() {
+        session.closeSession();
+        JCSMPProperties properties = new JCSMPProperties();
+        properties.setProperty(JCSMPProperties.HOST, solace.getOrigin(SolaceContainer.Service.SMF));
+        properties.setProperty(JCSMPProperties.VPN_NAME, solace.getVpn());
+        properties.setProperty(JCSMPProperties.USERNAME, solace.getUsername());
+        properties.setProperty(JCSMPProperties.PASSWORD, solace.getPassword());
+
+        try {
+            session = JCSMPFactory.onlyInstance().createSession(properties);
+            session.connect();
+        } catch (JCSMPException e) {
+            throw new RuntimeException(e);
+        }
+
+        MessagingServiceProvider.messagingService = session;
         MapBasedConfig config = commonConfig()
                 .with("mp.messaging.outgoing.out.connector", "quarkus-solace-jcsmp")
                 .with("mp.messaging.outgoing.out.client.tracing-enabled", "true")
@@ -176,6 +195,7 @@ public class TracingPropogationTest extends WeldTestBase {
     }
 
     @Test
+    @Order(1)
     void processor() {
         String processedTopic = topic + "/processed";
         MapBasedConfig config = commonConfig()
