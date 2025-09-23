@@ -55,9 +55,9 @@ public class KeycloakResource implements QuarkusTestResourceLifecycleManager {
                 Map.entry("quarkus.solace.vpn", solaceContainer.getVpn()),
                 Map.entry("quarkus.solace.oidc.refresh.interval", "5s"),
                 Map.entry("quarkus.solace.oidc.client-name", "solace"),
-                Map.entry("quarkus.solace.authentication.scheme", "AUTHENTICATION_SCHEME_OAUTH2"),
-                Map.entry("quarkus.solace.tls.cert-validated", "false"),
-                Map.entry("quarkus.solace.tls.cert-validate-servername", "false"));
+                Map.entry("quarkus.solace.AUTHENTICATION_SCHEME", "AUTHENTICATION_SCHEME_OAUTH2"),
+                Map.entry("quarkus.solace.SSL_VALIDATE_CERTIFICATE", "false"),
+                Map.entry("quarkus.solace.SSL_VALIDATE_CERTIFICATE_HOST", "false"));
     }
 
     private static void writeJks() {

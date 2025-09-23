@@ -1,6 +1,7 @@
 package com.solace.quarkus.runtime;
 
 import java.util.Map;
+import java.util.Properties;
 import java.util.function.Function;
 
 import jakarta.enterprise.inject.Instance;
@@ -26,14 +27,13 @@ public class SolaceRecorder {
             @Override
             public JCSMPSession apply(SyntheticCreationalContext<JCSMPSession> context) {
                 JCSMPProperties properties = new JCSMPProperties();
+                Properties withJCSMPPrefix = getProperties(config.extra());
+                if (!withJCSMPPrefix.isEmpty()) {
+                    properties = JCSMPProperties.fromProperties(withJCSMPPrefix);
+                }
+
                 properties.setProperty(JCSMPProperties.HOST, config.host());
                 properties.setProperty(JCSMPProperties.VPN_NAME, config.vpn());
-                for (Map.Entry<String, String> entry : config.extra().entrySet()) {
-                    properties.setProperty(entry.getKey(), entry.getValue());
-                    if (!entry.getKey().startsWith("solace.messaging.")) {
-                        properties.setProperty("solace.messaging." + entry.getKey(), entry.getValue());
-                    }
-                }
 
                 Instance<MessagingServiceClientCustomizer> reference = context.getInjectedReference(CUSTOMIZER);
                 OidcProvider oidcProvider = context.getInjectedReference(OidcProvider.class);
@@ -41,7 +41,7 @@ public class SolaceRecorder {
                 String authScheme = (String) properties.getProperty(JCSMPProperties.AUTHENTICATION_SCHEME);
 
                 if (oidcProvider != null && authScheme != null && "AUTHENTICATION_SCHEME_OAUTH2".equals(authScheme)) {
-                    properties.setProperty(JCSMPProperties.AUTHENTICATION_SCHEME_OAUTH2,
+                    properties.setProperty(JCSMPProperties.OAUTH2_ACCESS_TOKEN,
                             oidcProvider.getToken().getAccessToken());
                 }
 
@@ -91,6 +91,16 @@ public class SolaceRecorder {
                 }
             }
         }
+    }
+
+    private static Properties getProperties(Map<String, String> properties) {
+        Properties props = new Properties();
+        for (Map.Entry<String, String> entry : properties.entrySet()) {
+            String value = entry.getValue();
+            String solaceKey = entry.getKey();
+            props.put("jcsmp." + solaceKey, value);
+        }
+        return props;
     }
 
 }
