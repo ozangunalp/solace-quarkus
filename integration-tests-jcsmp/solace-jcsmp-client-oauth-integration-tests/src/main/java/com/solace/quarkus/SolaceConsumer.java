@@ -66,6 +66,7 @@ public class SolaceConsumer {
 
             }
         }, flow_prop, endpoint_props);
+        persistentReceiver.start();
     }
 
     public void shutdown(@Observes ShutdownEvent event) {
