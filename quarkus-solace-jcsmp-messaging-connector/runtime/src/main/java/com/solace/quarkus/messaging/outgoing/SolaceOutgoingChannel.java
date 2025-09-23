@@ -11,12 +11,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
-import io.smallrye.mutiny.subscription.UniEmitter;
 import jakarta.enterprise.inject.Instance;
 
 import org.eclipse.microprofile.reactive.messaging.Message;
 
-import com.solace.quarkus.messaging.PublishReceipt;
 import com.solace.quarkus.messaging.SolaceConnectorOutgoingConfiguration;
 import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
 import com.solace.quarkus.messaging.i18n.SolaceLogging;
@@ -27,6 +25,7 @@ import com.solacesystems.jcsmp.*;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.opentelemetry.api.OpenTelemetry;
 import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.subscription.UniEmitter;
 import io.smallrye.reactive.messaging.OutgoingMessageMetadata;
 import io.smallrye.reactive.messaging.health.HealthReport;
 import io.smallrye.reactive.messaging.providers.helpers.MultiUtils;

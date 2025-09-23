@@ -11,8 +11,6 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
-import com.solace.quarkus.messaging.base.MessagingServiceProvider;
-import com.solace.quarkus.messaging.base.SolaceContainer;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import org.eclipse.microprofile.reactive.messaging.Incoming;
@@ -25,6 +23,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
+import com.solace.quarkus.messaging.base.MessagingServiceProvider;
+import com.solace.quarkus.messaging.base.SolaceContainer;
 import com.solace.quarkus.messaging.base.WeldTestBase;
 import com.solace.quarkus.messaging.converters.SolaceMessageUtils;
 import com.solace.quarkus.messaging.incoming.SolaceInboundMetadata;
