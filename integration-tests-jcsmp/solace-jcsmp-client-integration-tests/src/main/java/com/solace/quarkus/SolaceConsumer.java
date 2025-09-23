@@ -36,7 +36,7 @@ public class SolaceConsumer {
         directReceiver.start();
 
         // configure the queue API object locally
-        final Queue queue = JCSMPFactory.onlyInstance().createQueue("hello/persistent");
+        final Queue queue = JCSMPFactory.onlyInstance().createQueue("persistent");
         // Create a Flow be able to bind to and consume messages from the Queue.
         final ConsumerFlowProperties flow_prop = new ConsumerFlowProperties();
         flow_prop.setEndpoint(queue);
@@ -44,7 +44,7 @@ public class SolaceConsumer {
         EndpointProperties endpoint_props = new EndpointProperties();
         endpoint_props.setAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
         endpoint_props.setPermission(EndpointProperties.PERMISSION_CONSUME);
-        endpoint_props.setQuota(0);
+        endpoint_props.setQuota(5);
         solace.provision(queue, endpoint_props, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
         try {
             solace.addSubscription(queue, JCSMPFactory.onlyInstance().createTopic("hello/persistent"),
@@ -66,6 +66,7 @@ public class SolaceConsumer {
 
             }
         }, flow_prop, endpoint_props);
+        persistentReceiver.start();
     }
 
     public void shutdown(@Observes ShutdownEvent event) {
