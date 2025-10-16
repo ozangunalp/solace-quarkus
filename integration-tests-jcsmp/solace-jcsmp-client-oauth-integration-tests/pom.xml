@@ -120,7 +120,6 @@
                 </plugins>
             </build>
             <properties>
-                <quarkus.package.type>native</quarkus.package.type>
                 <quarkus.native.enabled>native</quarkus.native.enabled>
                 <quarkus.native.additional-build-args>
                     --initialize-at-run-time=com.solacesystems.jcsmp.JCSMPFactory$JCSMPFactoryGlobals
