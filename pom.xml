@@ -186,7 +186,9 @@
       <id>publish</id>
       <modules>
         <module>quarkus-solace-client</module>
+        <module>quarkus-solace-jcsmp-client</module>
         <module>quarkus-solace-messaging-connector</module>
+        <module>quarkus-solace-jcsmp-messaging-connector</module>
       </modules>
       <build>
         <plugins>
