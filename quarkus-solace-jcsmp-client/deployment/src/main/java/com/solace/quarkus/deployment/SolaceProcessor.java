@@ -96,6 +96,7 @@ class SolaceProcessor {
     @BuildStep
     void configureNativeCompilation(BuildProducer<RuntimeInitializedClassBuildItem> producer) {
         producer.produce(new RuntimeInitializedClassBuildItem(JCSMPFactory.class.getName()));
+        producer.produce(new RuntimeInitializedClassBuildItem("com.solacesystems.jcsmp.JCSMPFactory$JCSMPFactoryGlobals"));
     }
 
     @BuildStep
