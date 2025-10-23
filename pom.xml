@@ -67,6 +67,12 @@
         <groupId>com.solacesystems</groupId>
         <artifactId>sol-jcsmp</artifactId>
         <version>${solace.jcsmp.version}</version>
+          <exclusions>
+              <exclusion>
+                  <groupId>io.netty</groupId>
+                  <artifactId>*</artifactId>
+              </exclusion>
+          </exclusions>
       </dependency>
 
       <dependency>
