@@ -97,6 +97,7 @@ class SolaceProcessor {
     void configureNativeCompilation(BuildProducer<RuntimeInitializedClassBuildItem> producer) {
         producer.produce(new RuntimeInitializedClassBuildItem(JCSMPFactory.class.getName()));
         producer.produce(new RuntimeInitializedClassBuildItem("com.solacesystems.jcsmp.JCSMPFactory$JCSMPFactoryGlobals"));
+        producer.produce(new RuntimeInitializedClassBuildItem("io.netty.channel.epoll.EpollSocketChannel"));
     }
 
     @BuildStep
