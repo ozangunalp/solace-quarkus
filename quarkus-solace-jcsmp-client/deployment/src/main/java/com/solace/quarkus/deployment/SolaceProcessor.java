@@ -3,6 +3,7 @@ package com.solace.quarkus.deployment;
 import java.util.Optional;
 import java.util.function.Function;
 
+import io.quarkus.deployment.builditem.nativeimage.NativeImageSystemPropertyBuildItem;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 
@@ -97,7 +98,11 @@ class SolaceProcessor {
     void configureNativeCompilation(BuildProducer<RuntimeInitializedClassBuildItem> producer) {
         producer.produce(new RuntimeInitializedClassBuildItem(JCSMPFactory.class.getName()));
         producer.produce(new RuntimeInitializedClassBuildItem("com.solacesystems.jcsmp.JCSMPFactory$JCSMPFactoryGlobals"));
-        producer.produce(new RuntimeInitializedClassBuildItem("io.netty.channel.epoll.EpollSocketChannel"));
+    }
+
+    @BuildStep
+    void disableEpollForNativeOnly(BuildProducer<NativeImageSystemPropertyBuildItem> props) {
+        props.produce(new NativeImageSystemPropertyBuildItem("io.netty.transport.noNative", "true"));
     }
 
     @BuildStep
